@@ -29,7 +29,7 @@ function update(dt) {
   if (currentMenuState !== 'PLAYING') return;
 
   // 1) Visuale (prima del movimento, cosi' W va dove si guarda in questo frame)
-  const look = Input.getLook(dt);
+  const look = Input.getLook();
   const yawPivot = Render.yawPivot();
   const pitchPivot = Render.pitchPivot();
   yawPivot.rotation.y -= look.x;                 // mouse a destra = gira a destra

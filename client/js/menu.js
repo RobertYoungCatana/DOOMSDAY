@@ -150,6 +150,11 @@ function beginMatch() {
 
   showEl('hud', '');
   lockPointer();
+
+  // Initialize networking when match starts
+  if (typeof initNetworking === 'function') {
+    initNetworking();
+  }
 }
 
 function startGame() {

@@ -1,0 +1,17 @@
+{
+  "name": "doomsday",
+  "version": "1.0.0",
+  "description": "DOOMSDAY - FPS 3D post-apocalittico multiplayer browser",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
