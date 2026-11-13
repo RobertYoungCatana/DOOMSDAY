@@ -1,7 +1,8 @@
-//Developer:Alex Venturini
+//Developer: Alex Venturini
+//Progetto: DOOMSDAY
 
 const express = require('express');
-const http = require('http');
+const http = http = require('http'); // correggiamo la sintassi pulita
 const { Server } = require('socket.io');
 const cors = require('cors');
 
@@ -16,13 +17,47 @@ const io = new Server(server, {
     }
 });
 
-// Lista di tutti i giocatori attivi nella stanza
 const players = {};
+const bots = {};
+
+// Generiamo 3 bot di prova all'avvio del server
+function initBots() {
+    for (let i = 1; i <= 3; i++) {
+        const botId = `bot_${i}`;
+        bots[botId] = {
+            id: botId,
+            name: `Mutante_${i}`,
+            x: Math.random() * 20 - 10,
+            y: 0,
+            z: Math.random() * 20 - 10,
+            direction: Math.random() * Math.PI * 2
+        };
+    }
+}
+initBots();
+
+// Loop di aggiornamento dell'IA dei bot (gira 10 volte al secondo: ogni 100ms)
+setInterval(() => {
+    Object.keys(bots).forEach((botId) => {
+        let bot = bots[botId];
+        
+        // Semplice movimento casuale / pattugliamento
+        bot.x += Math.cos(bot.direction) * 0.1;
+        bot.z += Math.sin(bot.direction) * 0.1;
+
+        // Cambia direzione ogni tanto casualmente
+        if (Math.random() < 0.05) {
+            bot.direction = Math.random() * Math.PI * 2;
+        }
+    });
+
+    // Invia la posizione aggiornata di tutti i bot ai client
+    io.emit('updateBots', bots);
+}, 100);
 
 io.on('connection', (socket) => {
     console.log(`> Giocatore connesso: ${socket.id}`);
 
-    // 1. Quando un giocatore entra nella partita
     socket.on('playerJoin', (playerData) => {
         players[socket.id] = {
             id: socket.id,
@@ -33,14 +68,13 @@ io.on('connection', (socket) => {
             rotation: playerData.rotation || 0
         };
 
-        // Invia al nuovo giocatore la lista di tutti gli altri giocatori già presenti
+        // Invia al nuovo giocatore la situazione attuale di giocatori e bot
         socket.emit('currentPlayers', players);
+        socket.emit('currentBots', bots);
 
-        // Avvisa tutti gli altri che si è unito un nuovo giocatore
         socket.broadcast.emit('newPlayer', players[socket.id]);
     });
 
-    // 2. Quando un giocatore si muove o ruota la visuale
     socket.on('playerMovement', (movementData) => {
         if (players[socket.id]) {
             players[socket.id].x = movementData.x;
@@ -48,21 +82,18 @@ io.on('connection', (socket) => {
             players[socket.id].z = movementData.z;
             players[socket.id].rotation = movementData.rotation;
 
-            // Invia la nuova posizione a tutti gli altri client
             socket.broadcast.emit('playerMoved', players[socket.id]);
         }
     });
 
-    // 3. Gestione della disconnessione
     socket.on('disconnect', () => {
         console.log(`X Giocatore disconnesso: ${socket.id}`);
         delete players[socket.id];
-        // Avvisa tutti i client che questo giocatore è uscito
         io.emit('disconnectPlayer', socket.id);
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server DOOMSDAY in ascolto sulla porta ${PORT}`);
+    console.log(`Server DOOMSDAY in ascolto sulla porta ${PORT} (con IA Bot attiva!)`);
 });
