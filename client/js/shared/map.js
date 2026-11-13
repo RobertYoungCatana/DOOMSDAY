@@ -100,6 +100,15 @@
     add(cx, cz, cw, cd, 0.65, C.smoke, { y: 1.0 });                    // abitacolo
   }
 
+  function truck(cx, cz, axis, color) {
+    const bw = axis === 'x' ? 6.0 : 2.4, bd = axis === 'x' ? 2.4 : 6.0;
+    add(cx, cz, bw, bd, 1.0, color, { y: 0.2 });                       // telaio / cassone
+    const cw = axis === 'x' ? 2.2 : 2.0, cd = axis === 'x' ? 2.0 : 2.2;
+    const offX = axis === 'x' ? 1.9 : 0;
+    const offZ = axis === 'z' ? 1.9 : 0;
+    add(cx + offX, cz + offZ, cw, cd, 1.4, C.smoke, { y: 1.2 });         // cabina camion
+  }
+
   function barrier(cx, cz, axis) {
     add(cx, cz, axis === 'x' ? 3.0 : 0.6, axis === 'x' ? 0.6 : 3.0, 1.0, C.concrete);
   }
@@ -117,48 +126,53 @@
     add(cx + 0.5, cz, 1.2, 0.2, 0.2, C.steel, { y: 4.9, solid: false });
   }
 
+  function signPost(cx, cz, axis) {
+    add(cx, cz, 0.15, 0.15, 3.2, C.steel, { solid: false });
+    const w = axis === 'x' ? 1.4 : 0.15, d = axis === 'x' ? 0.15 : 1.4;
+    add(cx, cz, w, d, 0.8, C.rust, { y: 2.4, solid: false });
+  }
+
   // ---------------------------------------------------------------
-  // 0) STRADA (solo decorazione) lungo X a z = 14, con strisce gialle
+  // 0) MURI PERIMETRALI ALTI (10m) e STRADA
   // ---------------------------------------------------------------
+  rect(-28, 28, -28.5, -27.5, 10, C.dark);   // Nord
+  rect(-28, 28, 27.5, 28.5, 10, C.dark);     // Sud
+  rect(-28.5, -27.5, -28, 28, 10, C.dark);   // Ovest
+  rect(27.5, 28.5, -28, 28, 10, C.dark);     // Est
+
   rect(-28, 28, 11.5, 16.5, 0.03, C.road, { solid: false, flat: true });
   for (let x = -24; x <= 24; x += 8) {
     rect(x - 1.5, x + 1.5, 13.9, 14.1, 0.03, C.yellow, { y: 0.03, solid: false, flat: true });
   }
 
   // ---------------------------------------------------------------
-  // 1) EDIFICIO CENTRALE crollato a due piani (x -7..7, z -6..6)
+  // 1) EDIFICIO CENTRALE crollato a due piani (x -7..7, z -6..6, solaio a ~3.6m)
   // ---------------------------------------------------------------
-  windowWall(-7, -1.5, -6, -5.4, C.concrete);        // nord: finestre a ovest
-  rect(1.5, 7, -6, -5.4, 1.4, C.concrete);           // nord: parte est crollata (porta tra -1.5 e 1.5)
-  rect(-7, -6.4, -6, -1.5, 2.75, C.concrete);        // ovest: pieno a nord
-  windowWall(-7, -6.4, 1.5, 6, C.concrete);          // ovest: finestre a sud (porta tra -1.5 e 1.5)
-  rect(6.4, 7, -6, -2, 1.2, C.concrete);             // est: crollato (breccia tra -2 e 1)
-  windowWall(6.4, 7, 1, 6, C.concrete);              // est: finestre a sud
-  windowWall(-7, 3, 5.4, 6, C.concrete);             // sud: finestre (porta tra 3 e 6)
-  rect(6, 7, 5.4, 6, 2.75, C.concrete);              // sud: angolo
+  windowWall(-7, -1.5, -6, -5.4, C.concrete);
+  rect(1.5, 7, -6, -5.4, 1.4, C.concrete);
+  rect(-7, -6.4, -6, -1.5, 3.6, C.concrete);
+  windowWall(-7, -6.4, 1.5, 6, C.concrete);
+  rect(6.4, 7, -6, -2, 1.5, C.concrete);
+  windowWall(6.4, 7, 1, 6, C.concrete);
+  windowWall(-7, 3, 5.4, 6, C.concrete);
+  rect(6, 7, 5.4, 6, 3.6, C.concrete);
 
-  rect(-7, 2, -6, 6, 0.4, C.dark, { y: 2.75 });      // solaio primo piano
-  rect(2, 7, -2, 6, 0.4, C.dark, { y: 2.75 });       // ... l'angolo nord-est e' crollato
+  rect(-7, 7, -6, 6, 0.4, C.dark, { y: 3.6 });       // solaio primo piano a 3.6m
+  rect(-7, -6.6, -6, 6, 1.0, C.concrete, { y: 4.0 }); // parapetti sul tetto
+  rect(-7, 7, -6, -5.6, 1.0, C.concrete, { y: 4.0 });
+  rect(-7, 7, 5.6, 6, 1.0, C.concrete, { y: 4.0 });
+  rect(6.6, 7, -6, 6, 1.0, C.concrete, { y: 4.0 });
 
-  rect(-7, -6.6, -6, 6, 1.0, C.concrete, { y: 3.15 });      // parapetti sul tetto
-  rect(-7, -2.5, -6, -5.6, 1.0, C.concrete, { y: 3.15 });
-  rect(-7, -2.4, 5.6, 6, 1.0, C.concrete, { y: 3.15 });
-  rect(0.4, 7, 5.6, 6, 1.0, C.concrete, { y: 3.15 });
-  rect(6.6, 7, -2, 6, 1.0, C.concrete, { y: 3.15 });
+  stairs(-6.4, 6.8, '+x', 8, 1.6, 0.75, C.concrete, '-z'); // 8 gradioni da 0.45 = 3.6m
 
-  stairs(-6.4, 6.8, '+x', 7, 1.6, 0.8, C.concrete, '-z');  // scala esterna lato sud
-
-  rect(-5, -4, -3.5, -2.5, 1.0, C.brown);            // casse e banco dentro l'edificio
+  rect(-5, -4, -3.5, -2.5, 1.0, C.brown);
   rect(-4, -3.2, -3.5, -2.7, 0.9, C.beige);
-  rect(2.5, 3.5, -0.5, 0.5, 2.75, C.concrete);       // pilastro
-  rect(-1, 1.5, 3, 4, 1.0, C.dark);
-
-  rect(2.5, 3.7, -4.8, -3.6, 0.5, C.dark);           // macerie dell'angolo crollato
+  rect(2.5, 3.5, -0.5, 0.5, 3.6, C.concrete);
+  rect(2.5, 3.7, -4.8, -3.6, 0.5, C.dark);
   rect(4.5, 5.9, -5.5, -4.2, 1.0, C.concrete);
-  rect(3.8, 4.8, -3.4, -2.5, 1.5, C.dark);
 
   // ---------------------------------------------------------------
-  // 2) TORRE DA CECCHINO a nord (piattaforma a 6.3 m, scala lunga sul lato est)
+  // 2) TORRE DA CECCHINO a nord (piattaforma a 6.3 m)
   // ---------------------------------------------------------------
   rect(-2.5, 2.5, -23.5, -18.5, 0.4, C.dark, { y: 5.9 });
   [[-2.2, -23.2], [2.2, -23.2], [-2.2, -18.8], [2.2, -18.8]].forEach(function (p) {
@@ -169,74 +183,71 @@
   rect(-2.5, -2.1, -23.5, -18.5, 1.0, C.steel, { y: 6.3 });
   rect(2.1, 2.5, -23.5, -22.2, 1.0, C.steel, { y: 6.3 });
   rect(2.1, 2.5, -19.8, -18.5, 1.0, C.steel, { y: 6.3 });
-  stairs(10.9, -21, '-x', 14, 1.8, 0.6, C.concrete, '-x');
+  stairs(10.9, -21, '-x', 14, 1.8, 0.55, C.concrete, '-x');
 
   // ---------------------------------------------------------------
-  // 3) ANGOLO NORD-OVEST: OFFICINA (tetto a 2.7 m)
+  // 3) ANGOLO NORD-OVEST: OFFICINA (tetto a 3.15 m)
   // ---------------------------------------------------------------
-  rect(-25, -17, -25, -24.4, 2.3, C.brown);
-  rect(-25, -24.4, -24.4, -17.6, 2.3, C.brown);
-  rect(-25, -21, -17.6, -17, 2.3, C.brown);
-  rect(-25, -19.5, -25, -17, 0.4, C.rust, { y: 2.3 });
-  rect(-24, -21, -23.8, -22.8, 1.0, C.steel);        // banco da lavoro
-  stairs(-18.7, -17.0, '-z', 6, 1.6, 0.7, C.concrete, '-x');
+  rect(-25, -17, -25, -24.4, 2.7, C.brown);
+  rect(-25, -24.4, -24.4, -17.6, 2.7, C.brown);
+  rect(-25, -21, -17.6, -17, 2.7, C.brown);
+  rect(-25, -17, -25, -17, 0.4, C.rust, { y: 2.7 });
+  rect(-24, -21, -23.8, -22.8, 1.0, C.steel);
+  stairs(-18.7, -17.0, '-z', 7, 1.6, 0.7, C.concrete, '-x');
   barrel(-23.5, -20.2, C.rust);
   barrel(-22.6, -20.0, C.olive);
 
   // ---------------------------------------------------------------
   // 4) ANGOLO NORD-EST: DISTRIBUTORE (tettoia a 3.15 m)
   // ---------------------------------------------------------------
-  rect(17.5, 24.5, -24, -18, 0.4, C.orange, { y: 2.75 });
+  rect(17.5, 24.5, -24, -18, 0.4, C.orange, { y: 3.15 });
   [[18.0, -23.4], [18.0, -18.6], [24.0, -23.4], [24.0, -18.6]].forEach(function (p) {
-    rect(p[0] - 0.3, p[0] + 0.3, p[1] - 0.3, p[1] + 0.3, 2.75, C.steel);
+    rect(p[0] - 0.3, p[0] + 0.3, p[1] - 0.3, p[1] + 0.3, 3.15, C.steel);
   });
-  rect(20.4, 21.2, -22.6, -21.8, 1.6, C.red);        // pompe
+  rect(20.4, 21.2, -22.6, -21.8, 1.6, C.red);
   rect(20.4, 21.2, -20.2, -19.4, 1.6, C.red);
-  rect(19.5, 23.5, -27.6, -25, 2.7, C.beige);        // chiosco
+  rect(19.5, 23.5, -27.6, -25, 2.7, C.beige);
   stairs(11.9, -21, '+x', 7, 1.6, 0.8, C.concrete, '+x');
 
   // ---------------------------------------------------------------
-  // 5) ANGOLO SUD-EST: BUNKER (tetto a 2.25 m)
+  // 5) ANGOLO SUD-EST: BUNKER (tetto a 2.7 m)
   // ---------------------------------------------------------------
-  rect(17, 25, 18, 18.7, 1.85, C.olive);
-  rect(17, 25, 23.3, 24, 1.85, C.olive);
-  rect(24.3, 25, 18.7, 23.3, 1.85, C.olive);
-  rect(17, 17.7, 18.7, 20.1, 1.85, C.olive);         // ingresso largo 2 m tra z 20.1 e 22.1
-  rect(17, 17.7, 22.1, 23.3, 1.85, C.olive);
-  rect(17, 25, 18, 24, 0.4, C.concrete, { y: 1.85 });
-  rect(24.6, 25, 18.4, 24, 0.8, C.beige, { y: 2.25 });  // sacchi di sabbia sul tetto
-  rect(17.4, 25, 23.6, 24, 0.8, C.beige, { y: 2.25 });
-  stairs(19, 14.4, '+z', 5, 1.6, 0.72, C.concrete, '+z');
+  rect(17, 25, 18, 18.7, 2.3, C.olive);
+  rect(17, 25, 23.3, 24, 2.3, C.olive);
+  rect(24.3, 25, 18.7, 23.3, 2.3, C.olive);
+  rect(17, 17.7, 18.7, 20.1, 2.3, C.olive);
+  rect(17, 17.7, 22.1, 23.3, 2.3, C.olive);
+  rect(17, 25, 18, 24, 0.4, C.concrete, { y: 2.3 });
+  rect(24.6, 25, 18.4, 24, 0.8, C.beige, { y: 2.7 });
+  stairs(19, 14.4, '+z', 6, 1.6, 0.72, C.concrete, '+z');
 
   // ---------------------------------------------------------------
-  // 6) ANGOLO SUD-OVEST: TORRE RADIO (piattaforma a 3.15 m, antenna decorativa)
+  // 6) ANGOLO SUD-OVEST: TORRE RADIO (piattaforma a 3.15 m)
   // ---------------------------------------------------------------
-  rect(-23, -19, 19, 23, 0.4, C.dark, { y: 2.75 });
+  rect(-23, -19, 19, 23, 0.4, C.dark, { y: 3.15 });
   [[-22.6, 19.4], [-19.4, 19.4], [-22.6, 22.6], [-19.4, 22.6]].forEach(function (p) {
-    rect(p[0] - 0.25, p[0] + 0.25, p[1] - 0.25, p[1] + 0.25, 2.75, C.steel);
+    rect(p[0] - 0.25, p[0] + 0.25, p[1] - 0.25, p[1] + 0.25, 3.15, C.steel);
   });
-  rect(-23, -19, 22.7, 23, 0.8, C.steel, { y: 3.15 });
-  rect(-23, -22.7, 19, 23, 0.8, C.steel, { y: 3.15 });
-  rect(-19.3, -19, 19, 23, 0.8, C.steel, { y: 3.15 });
+  rect(-23, -19, 22.7, 23, 0.8, C.steel, { y: 3.55 });
+  rect(-23, -22.7, 19, 23, 0.8, C.steel, { y: 3.55 });
+  rect(-19.3, -19, 19, 23, 0.8, C.steel, { y: 3.55 });
   rect(-21.15, -20.85, 20.85, 21.15, 14, C.steel, { solid: false });
   stairs(-21, 13.4, '+z', 7, 1.6, 0.8, C.concrete, '+z');
 
   // ---------------------------------------------------------------
-  // 7) CAVALCAVIA CROLLATO (impalcato a 4.05 m, estremita' sud spezzata)
+  // 7) CAVALCAVIA CROLLATO (impalcato a 3.65 m)
   // ---------------------------------------------------------------
   rect(-14, -10, -15, 11, 0.4, C.concrete, { y: 3.65 });
   rect(-14, -10, -8.6, -7.4, 3.65, C.dark);
   rect(-14, -10, 3.4, 4.6, 3.65, C.dark);
-  stairs(-12, -23.1, '+z', 9, 2.2, 0.9, C.concrete, '+z');
-  rect(-14, -10, 11, 14.5, 0.4, C.concrete, { y: 1.2 });   // pezzo caduto
+  stairs(-12, -23.1, '+z', 8, 2.2, 0.9, C.concrete, '+z');
+  rect(-14, -10, 11, 14.5, 0.4, C.concrete, { y: 1.2 });
   rect(-13.5, -12.3, 14.5, 15.6, 1.0, C.dark);
-  rect(-11.5, -10.3, 15.2, 16.2, 0.5, C.concrete);
 
   // ---------------------------------------------------------------
-  // 8) CONTAINER (corsie, anche impilati a due livelli)
+  // 8) CONTAINER & TRUCK/CAR WRECKS
   // ---------------------------------------------------------------
   const cc = [C.orange, C.olive, C.rust, C.red, C.steel];
-  // corsia est
   container(14, -10, 'z', 0, cc[0]);
   container(14, -10, 'z', 1, cc[1]);
   container(14, -1, 'z', 0, cc[2]);
@@ -245,20 +256,25 @@
   container(22, -8, 'z', 0, cc[1]);
   container(22, 2, 'z', 0, cc[0]);
   container(22, 10, 'z', 0, cc[2]);
-  // corsia ovest
+
   container(-22, -9, 'x', 0, cc[2]);
   container(-22, 0, 'x', 0, cc[3]);
   container(-22, 0, 'x', 1, cc[0]);
   container(-23, 8, 'x', 0, cc[1]);
-  // sud e nord
+
   container(-4, 19, 'x', 0, cc[4]);
   container(5, 22, 'x', 0, cc[0]);
   container(-6, -13, 'x', 0, cc[3]);
   container(7, -14, 'x', 0, cc[2]);
 
-  // ---------------------------------------------------------------
-  // 9) COPERTURE: barriere di cemento, auto, barili, muri spezzati, macerie
-  // ---------------------------------------------------------------
+  // Wrecks & Barriers
+  car(-3, 14, 'x', C.rust);
+  car(12, 15.2, 'x', C.steel);
+  truck(10, -4, 'z', C.olive);
+  truck(-18, -4, 'x', C.red);
+  car(3, -17, 'x', C.red);
+  car(-5, 24.5, 'x', C.orange);
+
   barrier(-8, 10, 'x');
   barrier(8, 9, 'x');
   barrier(0, -11, 'x');
@@ -267,12 +283,6 @@
   barrier(12, 4, 'z');
   barrier(-17, 5, 'x');
   barrier(3, -9, 'x');
-
-  car(-3, 14, 'x', C.rust);
-  car(12, 15.2, 'x', C.steel);
-  car(10, -4, 'z', C.olive);
-  car(3, -17, 'x', C.red);
-  car(-5, 24.5, 'x', C.orange);
 
   barrel(-9, -3, C.rust);
   barrel(-8.2, -2.4, C.olive);
@@ -290,50 +300,44 @@
   brokenWall(25, 0, 'z', 4, 2.0);
   brokenWall(-25, 16, 'x', 4, 1.6);
 
-  [[-3, -9, 1.6, 1.4, 0.5], [-2, -9.9, 1.2, 1.2, 1.0], [9, -17, 1.8, 1.5, 1.0],
-   [-9, 16, 1.5, 1.5, 0.5], [-7.8, 15.2, 1.1, 1.1, 1.0], [24.5, 17, 2.0, 1.6, 1.0],
-   [-24, -12, 1.5, 1.5, 1.0], [6, 18, 1.4, 1.4, 0.5]].forEach(function (r) {
-    add(r[0], r[1], r[2], r[3], r[4], C.dark);
-  });
-
   // ---------------------------------------------------------------
-  // 10) DECORAZIONI senza collisione: lampioni storti e fuochi (luci in MAP.lights)
+  // 9) DECORAZIONI: lampioni, cartelli, fuochi
   // ---------------------------------------------------------------
   lampPost(-7.5, 12);
   lampPost(8, -10);
   lampPost(-3, 26);
-  rect(5.75, 6.25, -9.25, -8.75, 0.6, C.fire, { y: 1.0, solid: false, emissive: true, flat: true });   // fuoco barile
+  signPost(-12, -2, 'x');
+  signPost(12, -18, 'z');
+
+  rect(5.75, 6.25, -9.25, -8.75, 0.6, C.fire, { y: 1.0, solid: false, emissive: true, flat: true });
   rect(-9.25, -8.75, 4.75, 5.25, 0.6, C.fire, { y: 1.0, solid: false, emissive: true, flat: true });
   rect(-0.3, 0.3, 19.7, 20.3, 0.6, C.fire, { y: 1.0, solid: false, emissive: true, flat: true });
 
   const lights = [
-    { x: 6, y: 2.8, z: -9, color: 0xff7a2a, intensity: 1.4, distance: 16 },
-    { x: -9, y: 2.8, z: 5, color: 0xff7a2a, intensity: 1.4, distance: 16 },
-    { x: 0, y: 2.8, z: 20, color: 0xff7a2a, intensity: 1.2, distance: 14 },
-    { x: 21, y: 2.4, z: -21, color: 0xffb060, intensity: 1.0, distance: 14 },
+    { x: 6, y: 2.8, z: -9, color: 0xff7a2a, intensity: 1.5, distance: 16 },
+    { x: -9, y: 2.8, z: 5, color: 0xff7a2a, intensity: 1.5, distance: 16 },
+    { x: 0, y: 2.8, z: 20, color: 0xff7a2a, intensity: 1.3, distance: 14 },
+    { x: 21, y: 2.4, z: -21, color: 0xffb060, intensity: 1.2, distance: 14 },
   ];
 
-  // ---------------------------------------------------------------
-  // Spawn (a terra, rivolti verso il centro) e oggetti raccoglibili
-  // ---------------------------------------------------------------
   const spawnPoints = [
     [-25, -13], [25, -13], [-25, 13], [25, 13],
     [0, -14], [0, 25], [-12, 24], [13, -26],
   ].map(function (p) {
-    return { x: p[0], y: 0, z: p[1], rot: Math.atan2(p[0], p[1]) };   // guarda verso (0,0)
+    return { x: p[0], y: 0, z: p[1], rot: Math.atan2(p[0], p[1]) };
   });
 
   const pickups = [
-    { type: 'health', x: 0, y: 6.3, z: -21 },      // torre cecchino
-    { type: 'ammo', x: -3, y: 3.15, z: 0 },        // primo piano dell'edificio
-    { type: 'health', x: 21, y: 3.15, z: -21 },    // tettoia distributore
-    { type: 'ammo', x: 21, y: 2.25, z: 21 },       // tetto del bunker
-    { type: 'health', x: -21, y: 3.15, z: 21 },    // torre radio
-    { type: 'ammo', x: -12, y: 4.05, z: -10 },     // cavalcavia
-    { type: 'health', x: 0, y: 0, z: 2 },          // dentro l'edificio
-    { type: 'ammo', x: -22, y: 0, z: -21 },        // officina
-    { type: 'health', x: 18, y: 0, z: 3 },         // corsia container est
-    { type: 'ammo', x: -4, y: 0, z: 22 },          // sud
+    { type: 'health', x: 0, y: 6.3, z: -21 },
+    { type: 'ammo', x: -3, y: 3.6, z: 0 },
+    { type: 'health', x: 21, y: 3.15, z: -21 },
+    { type: 'ammo', x: 21, y: 2.7, z: 21 },
+    { type: 'health', x: -21, y: 3.15, z: 21 },
+    { type: 'ammo', x: -12, y: 3.65, z: -10 },
+    { type: 'health', x: 0, y: 0, z: 2 },
+    { type: 'ammo', x: -22, y: 0, z: -21 },
+    { type: 'health', x: 18, y: 0, z: 3 },
+    { type: 'ammo', x: -4, y: 0, z: 22 },
   ];
 
   const MAP = {

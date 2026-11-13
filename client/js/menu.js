@@ -1,12 +1,10 @@
 // DOOMSDAY - menu.js
 // Menu principale, pausa, fine partita e HUD.
 // Stati: MENU, PLAYING, PAUSED, ENDED
-// ATTENZIONE: non ridichiarare CONFIG qui, e' gia' globale (config.js).
 
 let currentMenuState = 'MENU';
 let nickname = '';
 
-// --- Crea overlay, HUD, pausa e fine partita ---
 function initMenu() {
   const overlay = document.createElement('div');
   overlay.id = 'menu-overlay';
@@ -43,11 +41,10 @@ function initMenu() {
 
   setupMenuListeners();
 
-  // Nickname ricordato dall'ultima volta
   try {
     const saved = localStorage.getItem('doomsday_nick');
     if (saved) document.getElementById('nickname-input').value = saved;
-  } catch (e) { /* localStorage non disponibile: pazienza */ }
+  } catch (e) {}
 }
 
 function createMainMenuHTML() {
@@ -68,7 +65,8 @@ function createMainMenuHTML() {
           <li><span class="key">Shift</span>: Corri</li>
           <li><span class="key">Click</span>: Spara</li>
           <li><span class="key">R</span>: Ricarica</li>
-          <li><span class="key">1-3</span>: Cambia arma</li>
+          <li><span class="key">1-3</span>: Armi</li>
+          <li><span class="key">E</span>: Raccogli</li>
           <li><span class="key">Esc</span>: Pausa</li>
         </ul>
       </div>
@@ -80,7 +78,7 @@ function createHUDHTML() {
   return `
     <div class="crosshair"></div>
     <div class="health" id="hud-health">SALUTE: <span id="health-value">100</span></div>
-    <div class="ammo" id="hud-ammo">MUNIZIONI: <span id="ammo-value">0 / 0</span></div>
+    <div class="ammo" id="hud-ammo"><span id="weapon-name">PISTOLA</span> &nbsp; <span id="ammo-value">0 / 0</span></div>
     <div class="timer" id="hud-timer">TEMPO: <span id="timer-value">120</span>s</div>
   `;
 }
@@ -93,10 +91,9 @@ function setupMenuListeners() {
     startGame();
   });
 
-  // Mostra/nasconde i controlli (controlla lo stile reale, anche se deciso dal CSS)
   document.getElementById('controls-btn').addEventListener('click', () => {
     const help = document.getElementById('controls-help');
-    help.style.display = getComputedStyle(help).display === 'none' ? 'block' : 'none';
+    help.style.display = help.style.display === 'block' ? 'none' : 'block';
   });
 
   document.getElementById('resume-btn').addEventListener('click', resumeGame);
@@ -104,25 +101,20 @@ function setupMenuListeners() {
   document.getElementById('play-again-btn').addEventListener('click', restartGame);
   document.getElementById('end-quit-btn').addEventListener('click', quitToMain);
 
-  // ESC: il browser esce dal pointer lock (e di solito NON manda il keydown).
-  // Quindi la pausa si attiva quando il blocco del mouse cade durante la partita.
   document.addEventListener('pointerlockchange', () => {
     if (!document.pointerLockElement && currentMenuState === 'PLAYING') togglePause();
   });
-  document.addEventListener('pointerlockerror', () => {
-    if (currentMenuState === 'PLAYING') togglePause();
-  });
 }
 
-// --- HUD: aggiorna i valori (chiamata dal loop solo mentre si gioca) ---
 function updateHUD() {
   const p = Player.get();
+  const weapon = CONFIG.WEAPONS[p.currentWeapon];
   document.getElementById('health-value').textContent = Math.round(p.health);
+  document.getElementById('weapon-name').textContent = weapon.name.toUpperCase();
   document.getElementById('ammo-value').textContent = p.magazine + ' / ' + p.ammo;
   document.getElementById('timer-value').textContent = Math.max(0, Math.ceil(window.gameTimer));
 }
 
-// --- Utilita' ---
 function showEl(id, display) {
   const el = document.getElementById(id);
   if (el) el.style.display = display;
@@ -132,9 +124,6 @@ function lockPointer() {
   Render.renderer().domElement.requestPointerLock();
 }
 
-// --- Gestione degli stati ---
-
-// Inizia una partita: spawn, reset, timer, pointer lock (dentro al clic dell'utente)
 function beginMatch() {
   const spawns = MAP.spawnPoints;
   const spawn = spawns[Math.floor(Math.random() * spawns.length)];
@@ -148,13 +137,10 @@ function beginMatch() {
   window.gameTimer = CONFIG.GAME.MATCH_TIME;
   currentMenuState = 'PLAYING';
 
-  showEl('hud', '');
+  showEl('hud', 'block');
   lockPointer();
 
-  // Initialize networking when match starts
-  if (typeof initNetworking === 'function') {
-    initNetworking();
-  }
+  if (typeof initNetworking === 'function') initNetworking();
 }
 
 function startGame() {
@@ -169,7 +155,7 @@ function restartGame() {
 
 function togglePause() {
   if (currentMenuState !== 'PLAYING') return;
-  currentMenuState = 'PAUSED';     // PRIMA di rilasciare il mouse, cosi' non scatta due volte
+  currentMenuState = 'PAUSED';
   showEl('pause-menu', 'block');
   if (document.pointerLockElement) document.exitPointerLock();
 }
@@ -192,10 +178,7 @@ function quitToMain() {
 function endGame() {
   if (currentMenuState !== 'PLAYING') return;
   currentMenuState = 'ENDED';
-
-  // Rilascia il mouse, altrimenti non si puo' cliccare il menu finale
   if (document.pointerLockElement) document.exitPointerLock();
-
   showEl('hud', 'none');
   document.getElementById('end-nickname').textContent = nickname || 'Player';
   document.getElementById('end-kills').textContent = Player.get().kills;
@@ -203,7 +186,8 @@ function endGame() {
   showEl('end-menu', 'block');
 }
 
-// input.js chiama window.togglePause se arriva il keydown di ESC
-if (typeof window !== 'undefined') {
-  window.togglePause = togglePause;
-}
+window.togglePause = togglePause;
+window.currentMenuState = () => currentMenuState;
+window.endGame = endGame;
+window.updateHUD = updateHUD;
+window.initMenu = initMenu;

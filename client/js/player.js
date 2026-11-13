@@ -1,142 +1,242 @@
 // DOOMSDAY - player.js
-// Movimento FPS: WASD, salto, gravita', corsa, collisioni con le scatole della mappa.
-// Dipendenze: Three.js, CONFIG, Render, Input (input.js), collision (collision.js), MAP
+// Movimento FPS e logica giocatore (armi, pickup, stato, combat).
+// Dipendenze: Three.js, CONFIG, Render, Input, collision, MAP, Arena
 
-// Stato del giocatore
+const projectiles = [];
+let lastShotTime = 0;
+
 const player = {
-  id: '', // verra' impostato quando ci si collega al multiplayer
-  position: new THREE.Vector3(0, 0, 0),   // posizione dei PIEDI
+  id: '',
+  position: new THREE.Vector3(0, 0, 0),
   velocity: new THREE.Vector3(0, 0, 0),
   onGround: false,
   isRunning: false,
-  ammo: CONFIG.GAME.STARTING_AMMO,        // riserva
-  magazine: 0,                            // colpi nel caricatore
+  ammo: CONFIG.GAME.STARTING_AMMO,
+  magazine: 0,
   health: CONFIG.GAME.STARTING_LIVES,
   kills: 0,
   deaths: 0,
   currentWeapon: 'pistol',
 };
 
-// Mette il giocatore in una posizione di partenza (y opzionale per spawn su piattaforme)
-function spawnPlayer(x, z, y = 0) {
-  player.position.set(x, y, z);
-  player.velocity.set(0, 0, 0);
-  player.onGround = false;
-  player.health = CONFIG.GAME.STARTING_LIVES;
-  const weapon = CONFIG.WEAPONS[player.currentWeapon];
-  player.magazine = weapon.magazine;
-  player.ammo = CONFIG.GAME.STARTING_AMMO;
-  updatePlayerCamera();
+// Sistema sparo
+function fireWeapon() {
+  const p = get();
+  const weapon = CONFIG.WEAPONS[p.currentWeapon];
+
+  if (p.magazine <= 0) return false;
+
+  p.magazine--;
+  lastShotTime = Date.now();
+  return true;
 }
 
-// La camera segue i piedi + altezza occhi (cosi' si vede anche il salto)
-function updatePlayerCamera() {
-  const yaw = Render.yawPivot();
-  if (yaw) {
-    yaw.position.set(
-      player.position.x,
-      player.position.y + CONFIG.CAMERA.HEIGHT,
-      player.position.z
-    );
+function updateProjectiles(dt) {
+  const p = get();
+
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const proj = projectiles[i];
+    proj.position.add(proj.userData.velocity.clone().multiplyScalar(dt));
+
+    proj.userData.life -= dt;
+    if (proj.userData.life <= 0) {
+      Render.removeFromScene(proj);
+      projectiles.splice(i, 1);
+      continue;
+    }
+
+    // Collisione proiettile vs scatole
+    for (const box of MAP.boxes) {
+      if (box.solid === false) continue;
+
+      const dx = Math.abs(proj.position.x - box.x);
+      const dz = Math.abs(proj.position.z - box.z);
+      if (dx > box.w / 2 + 0.03 || dz > box.d / 2 + 0.03) continue;
+
+      const y0 = box.y || 0;
+      if (proj.position.y + 0.03 < y0 || proj.position.y - 0.03 > y0 + box.h) continue;
+
+      // Colpito scatola
+      Render.removeFromScene(proj);
+      projectiles.splice(i, 1);
+      break;
+    }
   }
 }
 
-// Movimento principale (chiamato a passo fisso)
-function updatePlayerMovement(dt) {
-  if (!Render.yawPivot()) return;
-
-  player.isRunning = Input.isRunning();
-
-  // --- Velocita' desiderata dall'input ---
-  const move = Input.getMove(); // {x, z} gia' ruotato secondo la camera, lunghezza max 1
-  const speed = player.isRunning ? CONFIG.MOVEMENT.RUN_SPEED : CONFIG.MOVEMENT.WALK_SPEED;
-  const vx = move.x * speed;
-  const vz = move.z * speed;
-
-  // A terra: risposta immediata. In aria: controllo ridotto (AIR_CONTROL)
-  if (player.onGround) {
-    player.velocity.x = vx;
-    player.velocity.z = vz;
-  } else {
-    const k = CONFIG.MOVEMENT.AIR_CONTROL;
-    player.velocity.x += (vx - player.velocity.x) * k;
-    player.velocity.z += (vz - player.velocity.z) * k;
-  }
-
-  // --- Gravita': SEMPRE attiva (la collisione azzera la velocita' quando si atterra) ---
-  player.velocity.y -= CONFIG.MOVEMENT.GRAVITY * dt;
-
-  // --- Salto ---
-  if (Input.isJumping() && player.onGround) {
-    player.velocity.y = CONFIG.MOVEMENT.JUMP_FORCE;
-    player.onGround = false;
-  }
-
-  // --- Movimento + collisioni (scatole, gradini, terreno) ---
-  window.collision.move(player, dt);
-
-  // --- Limiti arena ---
-  const half = (MAP.SIZE || ARENA.SIZE) / 2 - 0.5;
-  player.position.x = Math.max(-half, Math.min(half, player.position.x));
-  player.position.z = Math.max(-half, Math.min(half, player.position.z));
-
-  updatePlayerCamera();
-}
-
-// Danni
 function takeDamage(amount) {
-  player.health -= amount;
-  if (player.health <= 0) {
-    player.health = 0;
-    player.deaths++;
-    return true; // morto
+  get().health -= amount;
+  const p = get();
+  if (p.health <= 0) {
+    p.health = 0;
+    p.deaths++;
+    p.kills = Math.max(0, p.kills - 1);
+
+    // Delay respawn
+    const spawns = MAP.spawnPoints;
+    const spawn = spawns[Math.floor(Math.random() * spawns.length)];
+
+    setTimeout(() => {
+      spawnPlayer(spawn.x, spawn.z, spawn.y || 0);
+      get().health = CONFIG.GAME.STARTING_LIVES;
+      get().ammo = CONFIG.GAME.STARTING_AMMO;
+      const weapon = CONFIG.WEAPONS[p.currentWeapon];
+      get().magazine = weapon.magazine;
+    }, CONFIG.GAME.RESPAWN_TIME * 1000);
+
+    return true; // died
   }
   return false;
 }
 
-// Ricarica: porta il caricatore al massimo usando la riserva
-function reload() {
-  const weapon = CONFIG.WEAPONS[player.currentWeapon];
-  const taken = Math.min(weapon.magazine - player.magazine, player.ammo);
-  player.magazine += taken;
-  player.ammo -= taken;
+// Movimento FPS
+function spawnPlayer(x, z, y = 0) {
+  get().position.set(x, y, z);
+  get().velocity.set(0, 0, 0);
+  get().onGround = false;
+  get().health = CONFIG.GAME.STARTING_LIVES;
+  get().ammo = CONFIG.GAME.STARTING_AMMO;
+  const weapon = CONFIG.WEAPONS[get().currentWeapon];
+  get().magazine = weapon.magazine;
+  updatePlayerCamera();
 }
 
-// Cambio arma
-function selectWeapon(index) {
-  const names = Object.keys(CONFIG.WEAPONS);
-  if (index >= 0 && index < names.length) {
-    player.currentWeapon = names[index];
-    player.magazine = Math.min(player.magazine, CONFIG.WEAPONS[names[index]].magazine);
+function updatePlayerCamera() {
+  const yaw = Render.yawPivot();
+  if (yaw) {
+    yaw.position.set(
+      get().position.x,
+      get().position.y + CONFIG.CAMERA.HEIGHT,
+      get().position.z
+    );
   }
 }
 
-// Aggiungi munizioni
-function addAmmo(amount) {
-  player.ammo += amount;
+function updatePlayerMovement(dt) {
+  if (!Render.yawPivot()) return;
+
+  get().isRunning = Input.isRunning();
+
+  const move = Input.getMove();
+  const speed = get().isRunning ? CONFIG.MOVEMENT.RUN_SPEED : CONFIG.MOVEMENT.WALK_SPEED;
+  const vx = move.x * speed;
+  const vz = move.z * speed;
+
+  if (get().onGround) {
+    get().velocity.x = vx;
+    get().velocity.z = vz;
+  } else {
+    const k = CONFIG.MOVEMENT.AIR_CONTROL;
+    get().velocity.x += (vx - get().velocity.x) * k;
+    get().velocity.z += (vz - get().velocity.z) * k;
+  }
+
+  get().velocity.y -= CONFIG.MOVEMENT.GRAVITY * dt;
+
+  if (Input.isJumping() && get().onGround) {
+    get().velocity.y = CONFIG.MOVEMENT.JUMP_FORCE;
+    get().onGround = false;
+  }
+
+  window.collision.move(get(), dt);
+
+  const half = (MAP.SIZE || ARENA.SIZE) / 2 - 0.5;
+  get().position.x = Math.max(-half, Math.min(half, get().position.x));
+  get().position.z = Math.max(-half, Math.min(half, get().position.z));
+
+  updatePlayerCamera();
+  checkPickups();
 }
 
-// Aggiungi vita
-function addHealth(amount) {
-  player.health = Math.min(CONFIG.GAME.STARTING_LIVES, player.health + amount);
+function checkPickups() {
+  const pickupMeshes = Arena.getPickups();
+
+  pickupMeshes.forEach((mesh) => {
+    if (mesh.userData.taken) return;
+
+    const d = get().position.distanceTo(mesh.position);
+    if (d < 1.5) {
+      const type = mesh.userData.type;
+      if (type === 'health') {
+        if (get().health < 100) {
+          get().health = Math.min(100, get().health + 25);
+          mesh.userData.taken = true;
+          mesh.visible = false;
+        }
+      } else if (type === 'ammo') {
+        get().ammo += 30;
+        mesh.userData.taken = true;
+        mesh.visible = false;
+      }
+    }
+  });
 }
 
-// Esporta
+function reload() {
+  const weapon = CONFIG.WEAPONS[get().currentWeapon];
+  const needed = weapon.magazine - get().magazine;
+  const taken = Math.min(needed, get().ammo);
+  get().magazine += taken;
+  get().ammo -= taken;
+}
+
+function selectWeapon(index) {
+  const names = Object.keys(CONFIG.WEAPONS);
+  if (index >= 0 && index < names.length) {
+    get().currentWeapon = names[index];
+    const weapon = CONFIG.WEAPONS[names[index]];
+    get().magazine = Math.min(get().magazine, weapon.magazine);
+  }
+}
+
+// Play single-frame weapon fire
+function shootProjectile() {
+  const p = get();
+  const weapon = CONFIG.WEAPONS[p.currentWeapon];
+  const shootRate = 1000 / weapon.fireRate;
+
+  const now = Date.now();
+  if (!lastShotTime || now - lastShotTime >= shootRate) {
+    lastShotTime = now;
+
+    const yaw = Render.yawPivot();
+    const pitch = Render.pitchPivot();
+    if (!yaw || !pitch) return;
+
+    const dir = new THREE.Vector3(0, 0, -1);
+    dir.applyEuler(pitch.rotation);
+    dir.applyEuler(yaw.rotation);
+
+    const geo = new THREE.SphereGeometry(0.03, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const proj = new THREE.Mesh(geo, mat);
+
+    proj.position.copy(p.position).add(new THREE.Vector3(0, 0.3, 0));
+
+    proj.userData = {
+      velocity: dir.multiplyScalar(80),
+      damage: weapon.damage,
+      life: 2.0,
+    };
+
+    Render.addToScene(proj);
+    projectiles.push(proj);
+  }
+}
+
+// Player object
 const Player = {
   get: () => player,
   spawn: spawnPlayer,
   update: updatePlayerMovement,
+  fireWeapon,
+  updateProjectiles,
   takeDamage,
   reload,
   selectWeapon,
-  addAmmo,
-  addHealth,
   resetKills: () => { player.kills = 0; player.deaths = 0; },
 };
 
 if (typeof window !== 'undefined') {
   window.Player = Player;
-}
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = Player;
 }

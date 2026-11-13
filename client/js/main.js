@@ -1,8 +1,5 @@
 // DOOMSDAY - main.js
-// Loop di gioco principale. Inizializza tutto e aggiorna ogni frame.
-// Il loop parte SUBITO (cosi' dietro al menu si vede la mappa) e parte UNA sola volta.
-// Lo stato (MENU, PLAYING, PAUSED, ENDED) e' in menu.js: currentMenuState.
-
+// Loop di gioco principale + combat integration.
 let lastTime = 0;
 let accumulator = 0;
 const FIXED_STEP = 1 / 60;
@@ -19,35 +16,31 @@ function init() {
   Input.resetLook();
   initMenu();
 
-  // TODO rete: qui, in futuro, si collega NetworkManager (lavoro del backend)
-
   requestAnimationFrame(loop);
 }
 
-// Aggiornamento a passo fisso: solo mentre si sta giocando
 function update(dt) {
   if (currentMenuState !== 'PLAYING') return;
 
-  // 1) Visuale (prima del movimento, cosi' W va dove si guarda in questo frame)
+  // XOR: Salta sparo mentre si guarda - W sara' sparato
   const look = Input.getLook();
   const yawPivot = Render.yawPivot();
   const pitchPivot = Render.pitchPivot();
-  yawPivot.rotation.y -= look.x;                 // mouse a destra = gira a destra
+  yawPivot.rotation.y -= look.x;
   pitchPivot.rotation.x = Math.max(-1.55, Math.min(1.55, pitchPivot.rotation.x - look.y));
 
-  // 2) Movimento e collisioni
+  // Update movement & projectiles each frame (nei 20Hz)
   Player.update(dt);
+  Player.updateProjectiles(dt);
 
-  // 3) Timer partita
-  window.gameTimer -= dt;
-  if (window.gameTimer <= 0) {
-    window.gameTimer = 0;
+  timer -= dt;
+  if (timer <= 0) {
+    timer = 0;
     endGame();
   }
 }
 
 function render() {
-  // Nel menu: la camera gira lentamente sopra la mappa
   if (currentMenuState === 'MENU') {
     const yaw = Render.yawPivot();
     yaw.position.set(0, 16, 0);
@@ -74,6 +67,11 @@ function loop(time) {
 
   requestAnimationFrame(loop);
 }
+
+// Expose globals
+window.currentMenuState = currentMenuState
+window.gameTimer = CONFIG.GAME.MATCH_TIME;
+window.timer = CONFIG.GAME.MATCH_TIME;
 
 if (document.readyState === 'loading') {
   window.addEventListener('DOMContentLoaded', init);
