@@ -23,6 +23,211 @@
     }
     canvas {
       display: block;
+      z-index: 1;
+    }
+
+    /* --- Menu overlay --- */
+    #menu-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+      color: #fff;
+      background: #000;
+      z-index: 1000;
+    }
+
+    /* --- Main menu --- */
+    #main-menu {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    #main-menu h1 {
+      margin: 0;
+      font-size: 48px;
+      font-weight: bold;
+      color: #ff4500;
+      text-shadow: 0 0 20px #ff6b45;
+      letter-spacing: 4px;
+    }
+
+    #nickname-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #nickname-input {
+      padding: 8px 16px;
+      font-size: 16px;
+      width: 200px;
+      max-width: 90vw;
+      border: none;
+      border-radius: 4px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+
+    .play-btn, .controls-btn {
+      padding: 12px 24px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #000;
+      background: #ff4500;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .play-btn:hover, .controls-btn:hover {
+      background: #ff6b45;
+    }
+
+    .controls-help {
+      background: #1a1a1a;
+      border: 2px solid #ff4500;
+      padding: 20px;
+      max-width: 300px;
+      margin: 20px auto 0;
+      display: none;
+    }
+
+    .controls-help h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      color: #ff4500;
+    }
+
+    .controls-help ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .controls-help li {
+      margin: 4px 0;
+      font-size: 12px;
+      color: #ccc;
+    }
+
+    .controls-help .key {
+      color: #ff4500;
+      font-weight: bold;
+    }
+
+    /* --- HUD --- */
+    #hud {
+      position: absolute;
+      width: 100%;
+      pointer-events: none;
+      color: #fff;
+    }
+
+    #hud .crosshair {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    #hud .crosshair::before,
+    #hud .crosshair::after {
+      content: '';
+      position: absolute;
+      background: #ff4500;
+    }
+
+    #hud .crosshair::before {
+      width: 2px;
+      height: 100%;
+    }
+
+    #hud .crosshair::after {
+      width: 100%;
+      height: 2px;
+    }
+
+    .health, .ammo, .timer {
+      font-size: 14px;
+      position: absolute;
+    }
+
+    .health {
+      bottom: 20px;
+      left: 20px;
+      color: #4CAF50;
+    }
+    .ammo {
+      bottom: 20px;
+      right: 20px;
+      color: #ffcc00;
+    }
+    .timer {
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #ff4500;
+    }
+
+    /* --- Pause menu --- */
+    #pause-menu {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #1a1a1a;
+      border: 2px solid #ff4500;
+      padding: 30px;
+      display: none;
+    }
+
+    #pause-menu h2 {
+      margin: 0 0 20px 0;
+      color: #ff4500;
+    }
+
+    .pause-btn {
+      padding: 8px 16px;
+      font-size: 16px;
+      background: #ff4500;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+
+    .quit-btn {
+      background: #555;
+    }
+
+    /* --- End menu --- */
+    #end-menu {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      display: none;
+    }
+
+    #end-menu h2 {
+      color: #ff4500;
     }
   </style>
 </head>
@@ -42,6 +247,9 @@
   <script src="js/arena.js"></script>
   <script src="js/player.js"></script>
   <script src="js/input.js"></script>
+  <script src="js/menu.js"></script>
   <script src="js/main.js"></script>
+  <!-- Socket.IO client per multiplayer -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
 </body>
 </html>

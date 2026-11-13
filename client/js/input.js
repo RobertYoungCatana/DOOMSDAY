@@ -18,7 +18,9 @@ window.addEventListener('keydown', (e) => {
   keys[e.code] = true;
 
   if (e.code === 'Escape') {
-    if (mouse.locked) document.exitPointerLock();
+    if (mouse.locked && typeof window.togglePause === 'function') {
+      window.togglePause();
+    }
   }
 
   // Impedisce lo scrolling della pagina con la barra spaziatrice

@@ -1,87 +1,60 @@
 // DOOMSDAY - main.js
 // Loop di gioco principale. Inizializza tutto e aggiorna ogni frame.
-// MAP disponibile globalmente da shared/map.js (caricato prima in index.html)
+// Il loop parte SUBITO (cosi' dietro al menu si vede la mappa) e parte UNA sola volta.
+// Lo stato (MENU, PLAYING, PAUSED, ENDED) e' in menu.js: currentMenuState.
 
 let lastTime = 0;
 let accumulator = 0;
 const FIXED_STEP = 1 / 60;
 
 function init() {
-  console.log('DOOMSDAY: inizializzazione...');
-
   const container = document.getElementById('app');
   if (!container) {
     console.error('ERRORE: div #app non trovato!');
     return;
   }
-  console.log('Container trovato:', container);
 
   Render.initRender(container);
-
-  const renderer = Render.renderer();
-  const size = Render.getSize();
-  console.log('Renderer size:', size.w, 'x', size.h);
-
   Arena.build();
-  console.log('Arena costruita');
-
-  Player.spawn(0, 0);
   Input.resetLook();
+  initMenu();
 
-  const canvasEl = renderer.domElement;
-  canvasEl.addEventListener('click', () => {
-    if (!Input.getMouseLocked()) {
-      canvasEl.requestPointerLock();
-      console.log('Pointer lock richiesto');
-    }
-  });
+  // TODO rete: qui, in futuro, si collega NetworkManager (lavoro del backend)
 
-  console.log('DOOMSDAY inizializzato. Usa WASD, mouse, spazio, shift.');
-  // Nota: il pointer lock viene richiesto dal menu (PASSO C) quando l'utente clicca GIOCA.
+  requestAnimationFrame(loop);
 }
 
-let fireFlash = 0; // countdown per l'indicatore di sparo (debug)
+// Aggiornamento a passo fisso: solo mentre si sta giocando
+function update(dt) {
+  if (currentMenuState !== 'PLAYING') return;
 
-function update(fixedDt) {
-  Player.update(fixedDt);
-
-  const look = Input.getLook();
+  // 1) Visuale (prima del movimento, cosi' W va dove si guarda in questo frame)
+  const look = Input.getLook(dt);
   const yawPivot = Render.yawPivot();
   const pitchPivot = Render.pitchPivot();
+  yawPivot.rotation.y -= look.x;                 // mouse a destra = gira a destra
+  pitchPivot.rotation.x = Math.max(-1.55, Math.min(1.55, pitchPivot.rotation.x - look.y));
 
-  if (yawPivot) {
-    // In Three.js, rotazione Y positiva = gira a SINISTRA.
-    // Quindi invertiamo il segno del mouse per che destra = destra.
-    yawPivot.rotation.y -= look.x;
-  }
-  if (pitchPivot) {
-    // In Three.js, rotazione X positiva = guarda VERSO IL BASSO.
-    // Invertiamo il segno: mouse su = guarda verso l'alto.
-    pitchPivot.rotation.x -= look.y;
-    pitchPivot.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchPivot.rotation.x));
-  }
+  // 2) Movimento e collisioni
+  Player.update(dt);
 
-  Player.get().isRunning = Input.isRunning();
-
-  // Debug: indicatore di sparo (cerchio rosso quando si clicca)
-  if (Input.isShooting()) {
-    fireFlash = 0.2; // appare per 200ms
-  }
-  if (fireFlash > 0) {
-    fireFlash -= fixedDt;
+  // 3) Timer partita
+  window.gameTimer -= dt;
+  if (window.gameTimer <= 0) {
+    window.gameTimer = 0;
+    endGame();
   }
 }
 
 function render() {
-  // La camera è già figlia dei pivot, non copiare la posizione
-  Render.renderer().render(Render.scene(), Render.camera());
-
-  // DEBUG: mostra un cerchio rosso quando si spara
-  if (fireFlash > 0) {
-    if (fireFlash > 0.1) {
-      console.log('SPARO!');
-    }
+  // Nel menu: la camera gira lentamente sopra la mappa
+  if (currentMenuState === 'MENU') {
+    const yaw = Render.yawPivot();
+    yaw.position.set(0, 16, 0);
+    yaw.rotation.y += 0.003;
+    Render.pitchPivot().rotation.x = -0.55;
   }
+  Render.renderer().render(Render.scene(), Render.camera());
 }
 
 function loop(time) {
@@ -97,21 +70,13 @@ function loop(time) {
   }
 
   render();
-  requestAnimationFrame(loop);
-}
+  if (currentMenuState === 'PLAYING') updateHUD();
 
-function startGame() {
-  if (typeof Render === 'undefined' || typeof Arena === 'undefined' || typeof Player === 'undefined' || typeof Input === 'undefined') {
-    console.error('ERRORE: moduli non caricati ancora. Riprovo tra 100ms...');
-    setTimeout(startGame, 100);
-    return;
-  }
-  init();
   requestAnimationFrame(loop);
 }
 
 if (document.readyState === 'loading') {
-  window.addEventListener('DOMContentLoaded', startGame);
+  window.addEventListener('DOMContentLoaded', init);
 } else {
-  startGame();
+  init();
 }
