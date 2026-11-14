@@ -20,6 +20,9 @@ const player = {
 };
 
 // Sistema sparo
+const get = () => player;
+
+// Sistema sparo
 function fireWeapon() {
   const p = get();
   const weapon = CONFIG.WEAPONS[p.currentWeapon];
@@ -91,13 +94,14 @@ function takeDamage(amount) {
 
 // Movimento FPS
 function spawnPlayer(x, z, y = 0) {
-  get().position.set(x, y, z);
-  get().velocity.set(0, 0, 0);
-  get().onGround = false;
-  get().health = CONFIG.GAME.STARTING_LIVES;
-  get().ammo = CONFIG.GAME.STARTING_AMMO;
-  const weapon = CONFIG.WEAPONS[get().currentWeapon];
-  get().magazine = weapon.magazine;
+  const p = get();
+  p.position.set(x, y, z);
+  p.velocity.set(0, 0, 0);
+  p.onGround = false;
+  p.health = CONFIG.GAME.STARTING_LIVES;
+  p.ammo = CONFIG.GAME.STARTING_AMMO;
+  const weapon = CONFIG.WEAPONS[p.currentWeapon];
+  p.magazine = weapon.magazine;
   updatePlayerCamera();
 }
 
@@ -115,34 +119,35 @@ function updatePlayerCamera() {
 function updatePlayerMovement(dt) {
   if (!Render.yawPivot()) return;
 
-  get().isRunning = Input.isRunning();
+  const p = get();
+  p.isRunning = Input.isRunning();
 
   const move = Input.getMove();
-  const speed = get().isRunning ? CONFIG.MOVEMENT.RUN_SPEED : CONFIG.MOVEMENT.WALK_SPEED;
+  const speed = p.isRunning ? CONFIG.MOVEMENT.RUN_SPEED : CONFIG.MOVEMENT.WALK_SPEED;
   const vx = move.x * speed;
   const vz = move.z * speed;
 
-  if (get().onGround) {
-    get().velocity.x = vx;
-    get().velocity.z = vz;
+  if (p.onGround) {
+    p.velocity.x = vx;
+    p.velocity.z = vz;
   } else {
     const k = CONFIG.MOVEMENT.AIR_CONTROL;
-    get().velocity.x += (vx - get().velocity.x) * k;
-    get().velocity.z += (vz - get().velocity.z) * k;
+    p.velocity.x += (vx - p.velocity.x) * k;
+    p.velocity.z += (vz - p.velocity.z) * k;
   }
 
-  get().velocity.y -= CONFIG.MOVEMENT.GRAVITY * dt;
+  p.velocity.y -= CONFIG.MOVEMENT.GRAVITY * dt;
 
-  if (Input.isJumping() && get().onGround) {
-    get().velocity.y = CONFIG.MOVEMENT.JUMP_FORCE;
-    get().onGround = false;
+  if (Input.isJumping() && p.onGround) {
+    p.velocity.y = CONFIG.MOVEMENT.JUMP_FORCE;
+    p.onGround = false;
   }
 
-  window.collision.move(get(), dt);
+  window.collision.move(p, dt);
 
   const half = (MAP.SIZE || ARENA.SIZE) / 2 - 0.5;
-  get().position.x = Math.max(-half, Math.min(half, get().position.x));
-  get().position.z = Math.max(-half, Math.min(half, get().position.z));
+  p.position.x = Math.max(-half, Math.min(half, p.position.x));
+  p.position.z = Math.max(-half, Math.min(half, p.position.z));
 
   updatePlayerCamera();
   checkPickups();
@@ -150,21 +155,22 @@ function updatePlayerMovement(dt) {
 
 function checkPickups() {
   const pickupMeshes = Arena.getPickups();
+  const p = get();
 
   pickupMeshes.forEach((mesh) => {
     if (mesh.userData.taken) return;
 
-    const d = get().position.distanceTo(mesh.position);
+    const d = p.position.distanceTo(mesh.position);
     if (d < 1.5) {
       const type = mesh.userData.type;
       if (type === 'health') {
-        if (get().health < 100) {
-          get().health = Math.min(100, get().health + 25);
+        if (p.health < 100) {
+          p.health = Math.min(100, p.health + 25);
           mesh.userData.taken = true;
           mesh.visible = false;
         }
       } else if (type === 'ammo') {
-        get().ammo += 30;
+        p.ammo += 30;
         mesh.userData.taken = true;
         mesh.visible = false;
       }
@@ -173,19 +179,21 @@ function checkPickups() {
 }
 
 function reload() {
-  const weapon = CONFIG.WEAPONS[get().currentWeapon];
-  const needed = weapon.magazine - get().magazine;
-  const taken = Math.min(needed, get().ammo);
-  get().magazine += taken;
-  get().ammo -= taken;
+  const p = get();
+  const weapon = CONFIG.WEAPONS[p.currentWeapon];
+  const needed = weapon.magazine - p.magazine;
+  const taken = Math.min(needed, p.ammo);
+  p.magazine += taken;
+  p.ammo -= taken;
 }
 
 function selectWeapon(index) {
+  const p = get();
   const names = Object.keys(CONFIG.WEAPONS);
   if (index >= 0 && index < names.length) {
-    get().currentWeapon = names[index];
+    p.currentWeapon = names[index];
     const weapon = CONFIG.WEAPONS[names[index]];
-    get().magazine = Math.min(get().magazine, weapon.magazine);
+    p.magazine = Math.min(p.magazine, weapon.magazine);
   }
 }
 
@@ -223,6 +231,7 @@ function shootProjectile() {
     projectiles.push(proj);
   }
 }
+
 
 // Player object
 const Player = {

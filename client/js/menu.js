@@ -102,7 +102,7 @@ function setupMenuListeners() {
   document.getElementById('end-quit-btn').addEventListener('click', quitToMain);
 
   document.addEventListener('pointerlockchange', () => {
-    if (!document.pointerLockElement && currentMenuState === 'PLAYING') togglePause();
+    if (!document.pointerLockElement && window.currentMenuState() === 'PLAYING') togglePause();
   });
 }
 
@@ -140,6 +140,9 @@ function beginMatch() {
   showEl('hud', 'block');
   lockPointer();
 
+  // Cinematica: camera drop dall'alto al punto di spawn
+  if (typeof window.startDrop === 'function') window.startDrop();
+
   if (typeof initNetworking === 'function') initNetworking();
 }
 
@@ -154,7 +157,7 @@ function restartGame() {
 }
 
 function togglePause() {
-  if (currentMenuState !== 'PLAYING') return;
+  if (window.currentMenuState() !== 'PLAYING') return;
   currentMenuState = 'PAUSED';
   showEl('pause-menu', 'block');
   if (document.pointerLockElement) document.exitPointerLock();
@@ -176,7 +179,7 @@ function quitToMain() {
 }
 
 function endGame() {
-  if (currentMenuState !== 'PLAYING') return;
+  if (window.currentMenuState() !== 'PLAYING') return;
   currentMenuState = 'ENDED';
   if (document.pointerLockElement) document.exitPointerLock();
   showEl('hud', 'none');

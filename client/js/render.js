@@ -4,14 +4,15 @@
 
 let scene, camera, renderer;
 let playerYaw, cameraLookAt;
+let dropOffset = new THREE.Vector3(0, 0, 0); // usato per l'animazione di caduta camera
 
 function initRender(container) {
-  // 1. Scena & Atmosfera Apocalittica
+  // 1. Scena & Atmosfera Apocalittica Verde "Post-Guerra"
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x38281e); // cielo grigio-arancione polveroso
-  scene.fog = new THREE.Fog(0x38281e, 30, 95);
+  scene.background = new THREE.Color(0x2a3025); // Cielo verdognolo scuro (atmosfera tossica)
+  scene.fog = new THREE.Fog(0x2a3025, 20, 80); // Nebbia più densa e verdastra
 
-  // 2. Camera
+  // ... (resto non modificato per brevità)
   camera = new THREE.PerspectiveCamera(
     CONFIG.CAMERA.FOV,
     window.innerWidth / window.innerHeight,
@@ -41,10 +42,10 @@ function initRender(container) {
   container.appendChild(renderer.domElement);
 
   // 7. Luci (Sole basso arancione + luce ambiente soffusa)
-  const ambientLight = new THREE.AmbientLight(0x4a443e, 0.65);
+  const ambientLight = new THREE.AmbientLight(0x404435, 0.5);
   scene.add(ambientLight);
 
-  const sunLight = new THREE.DirectionalLight(0xff9944, 1.3);
+  const sunLight = new THREE.DirectionalLight(0x99aa88, 1.1);
   sunLight.position.set(30, 22, 20);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(1024, 1024);
@@ -77,6 +78,8 @@ const Render = {
   addToScene: (obj) => scene.add(obj),
   removeFromScene: (obj) => scene.remove(obj),
   getSize: () => ({ w: window.innerWidth, h: window.innerHeight }),
+  setCameraOffset: (v) => { dropOffset.copy(v); cameraLookAt.position.copy(v); },
+  getCameraOffset: () => dropOffset,
 };
 
 if (typeof window !== 'undefined') {
