@@ -33,9 +33,9 @@ const CONFIG = {
 
   // --- Arena ---
   ARENA: {
-    SIZE: 40,               // metri di lato (quadrata)
+    SIZE: 56,               // metri di lato (quadrata)
     WALL_HEIGHT: 10,        // altezza muri
-    FLOOR_COLOR: 0x3a3a3a,  // grigio cemento
+    FLOOR_COLOR: 0x4d463e,  // grigio cemento
     WALL_COLOR: 0x2a2a2a,
     ACCENT_COLOR: 0xff4500, // arancione DOOMSDAY
   },

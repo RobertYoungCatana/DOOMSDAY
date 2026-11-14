@@ -24,9 +24,9 @@ window.addEventListener('keydown', (e) => {
   }
 
   // Previeni scrolling per tasti gioco
-  if (['Space', 'KeyW', 'KeyS', 'KeyA', 'KeyD'].includes(e.code)) {
-    e.preventDefault();
-  }
+  // La barra spaziatrice fa preventDefault SOLO se il mouse e' bloccato
+  if (e.code === 'Space' && mouse.locked) e.preventDefault();
+  if (['KeyW', 'KeyS', 'KeyA', 'KeyD'].includes(e.code)) e.preventDefault();
 
   // Tasti selezione arma (1-3)
   if (e.code === 'Digit1') Player.selectWeapon(0);
