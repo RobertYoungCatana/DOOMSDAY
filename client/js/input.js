@@ -1,6 +1,6 @@
 // DOOMSDAY - input.js
 // Gestione tastiera, mouse e Gamepad API.
-// Fornisce: movimento, look, salto, sparo, ricarica, cambio arma.
+// Fornisce: movimento, look, salto, sparo, ricarica, cambio arma, interazione.
 
 const keys = {};
 const mouse = {
@@ -23,11 +23,15 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  // Impedisce lo scrolling della pagina con la barra spaziatrice
-  if (e.code === 'Space') {
+  // Previeni scrolling per tasti gioco
+  if (['Space', 'KeyW', 'KeyS', 'KeyA', 'KeyD'].includes(e.code)) {
     e.preventDefault();
-    console.log('Spazio premuto'); // debug
   }
+
+  // Tasti selezione arma (1-3)
+  if (e.code === 'Digit1') Player.selectWeapon(0);
+  if (e.code === 'Digit2') Player.selectWeapon(1);
+  if (e.code === 'Digit3') Player.selectWeapon(2);
 });
 
 window.addEventListener('keyup', (e) => {
@@ -98,72 +102,53 @@ function readGamepad() {
   };
 
   const buttons = {
-    jump: gp.buttons[0] ? gp.buttons[0].pressed : false,
-    shoot: gp.buttons[1] ? gp.buttons[1].pressed : false,
-    reload: gp.buttons[2] ? gp.buttons[2].pressed : false,
-    weaponPrev: gp.buttons[4] ? gp.buttons[4].pressed : false,
-    weaponNext: gp.buttons[5] ? gp.buttons[5].pressed : false,
-    run: gp.buttons[6] ? gp.buttons[6].pressed : false,
+    jump: gp.buttons[0].pressed,
+    shoot: gp.buttons[1].pressed,
+    reload: gp.buttons[2].pressed,
+    interact: gp.buttons[3].pressed,
+    weaponPrev: gp.buttons[4].pressed,
+    weaponNext: gp.buttons[5].pressed,
+    run: gp.buttons[6].pressed,
   };
 
-  return { move, look, buttons, raw: gp };
+  return { move, look, buttons };
 }
 
 // --- API pubblica ---
 function isJumping() {
-  if (keys['Space']) return true;
-  const gp = readGamepad();
-  if (gp && gp.buttons.jump) return true;
-  return false;
+  return keys['Space'] || (readGamepad() && readGamepad().buttons.jump);
 }
 
 function isRunning() {
-  if (keys['ShiftLeft'] || keys['ShiftRight']) return true;
-  const gp = readGamepad();
-  if (gp && gp.buttons.run) return true;
-  return false;
+  return keys['ShiftLeft'] || keys['ShiftRight'] || (readGamepad() && readGamepad().buttons.run);
 }
 
 function isShooting() {
-  if (keys['Mouse0']) return true;
-  const gp = readGamepad();
-  if (gp && gp.buttons.shoot) return true;
-  return false;
+  return keys['Mouse0'] || (readGamepad() && readGamepad().buttons.shoot);
 }
 
 function isReloading() {
-  if (keys['KeyR']) return true;
-  const gp = readGamepad();
-  if (gp && gp.buttons.reload) return true;
-  return false;
+  return keys['KeyR'] || (readGamepad() && readGamepad().buttons.reload);
+}
+
+function isInteracting() {
+  return keys['KeyE'] || (readGamepad() && readGamepad().buttons.interact);
 }
 
 function getMove() {
   const yaw = Render ? Render.yawPivot() : null;
   const yawAngle = yaw ? yaw.rotation.y : 0;
 
-  // Vettori direzionali della camera (solo piano orizzontale).
-  // Con rotazione Y = θ:
-  //   forward (avanti) = (-sin θ, 0, -cos θ)
-  //   right (destra)   = (cos θ, 0, -sin θ)
-  const forward = new THREE.Vector3(
-    -Math.sin(yawAngle),
-    0,
-    -Math.cos(yawAngle)
-  );
-  const right = new THREE.Vector3(
-    Math.cos(yawAngle),
-    0,
-    -Math.sin(yawAngle)
-  );
+  const forward = new THREE.Vector3(-Math.sin(yawAngle), 0, -Math.cos(yawAngle));
+  const right = new THREE.Vector3(Math.cos(yawAngle), 0, -Math.sin(yawAngle));
 
-  let moveX = 0; // destra/sinistra
-  let moveZ = 0; // avanti/indietro
+  let moveX = 0;
+  let moveZ = 0;
 
-  if (keys['KeyW']) moveZ += 1;  // avanti
-  if (keys['KeyS']) moveZ -= 1;  // indietro
-  if (keys['KeyD']) moveX += 1;  // destra
-  if (keys['KeyA']) moveX -= 1;  // sinistra
+  if (keys['KeyW']) moveZ += 1;
+  if (keys['KeyS']) moveZ -= 1;
+  if (keys['KeyD']) moveX += 1;
+  if (keys['KeyA']) moveX -= 1;
 
   const gp = readGamepad();
   if (gp) {
@@ -171,44 +156,24 @@ function getMove() {
     moveZ = gp.move.z;
   }
 
-  // Combina i vettori: moveZ * forward + moveX * right
   const dir = new THREE.Vector3();
   dir.addScaledVector(forward, moveZ);
   dir.addScaledVector(right, moveX);
 
-  // Normalizza il vettore in diagonale (evita di correre più veloce in diagonale)
-  if (dir.lengthSq() > 1) {
-    dir.normalize();
-  }
+  if (dir.lengthSq() > 1) dir.normalize();
 
   return { x: dir.x, z: dir.z };
 }
 
 function getLook() {
   const gp = readGamepad();
-  let result;
   if (gp) {
-    result = { x: gp.look.x, y: gp.look.y, fromGamepad: true };
-  } else {
-    result = { x: mouse.x, y: mouse.y, fromGamepad: false };
+    return { x: gp.look.x, y: gp.look.y, fromGamepad: true };
   }
-  // Azzeriamo la variazione dopo averla letta (delta frame)
+  const result = { x: mouse.x, y: mouse.y, fromGamepad: false };
   mouse.x = 0;
   mouse.y = 0;
   return result;
-}
-
-function isGamepadConnected() {
-  return gamepadConnected;
-}
-
-function getGamepadState() {
-  return readGamepad();
-}
-
-function resetLook() {
-  mouse.x = 0;
-  mouse.y = 0;
 }
 
 const Input = {
@@ -218,15 +183,11 @@ const Input = {
   isRunning,
   isShooting,
   isReloading,
-  isGamepadConnected,
-  getGamepadState,
-  resetLook,
+  isInteracting,
   getMouseLocked: () => mouse.locked,
+  resetLook: () => { mouse.x = 0; mouse.y = 0; }
 };
 
 if (typeof window !== 'undefined') {
   window.Input = Input;
-}
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = Input;
 }

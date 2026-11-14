@@ -1,17 +1,18 @@
 // DOOMSDAY - render.js
-// Scena 3D, camera, renderer, luci.
+// Scena 3D, camera, renderer, luci (atmosfera apocalittica).
 // Dipendenze: Three.js (globale), CONFIG (config.js)
 
 let scene, camera, renderer;
 let playerYaw, cameraLookAt;
+let dropOffset = new THREE.Vector3(0, 0, 0); // usato per l'animazione di caduta camera
 
 function initRender(container) {
-  // 1. Scena
+  // 1. Scena & Atmosfera Apocalittica Verde "Post-Guerra"
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a1a);
-  scene.fog = new THREE.Fog(0x1a1a1a, 50, 120);
+  scene.background = new THREE.Color(0x2a3025); // Cielo verdognolo scuro (atmosfera tossica)
+  scene.fog = new THREE.Fog(0x2a3025, 20, 80); // Nebbia più densa e verdastra
 
-  // 2. Camera
+  // ... (resto non modificato per brevità)
   camera = new THREE.PerspectiveCamera(
     CONFIG.CAMERA.FOV,
     window.innerWidth / window.innerHeight,
@@ -24,7 +25,7 @@ function initRender(container) {
   playerYaw.position.set(0, CONFIG.CAMERA.HEIGHT, 0);
   scene.add(playerYaw);
 
-  // 4. Pivot per rotazione verticale (pitch) — evita di guardare sotto terra
+  // 4. Pivot per rotazione verticale (pitch)
   cameraLookAt = new THREE.Group();
   playerYaw.add(cameraLookAt);
 
@@ -40,29 +41,21 @@ function initRender(container) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // 7. Luci
-  const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+  // 7. Luci (Sole basso arancione + luce ambiente soffusa)
+  const ambientLight = new THREE.AmbientLight(0x404435, 0.5);
   scene.add(ambientLight);
 
-  const sunLight = new THREE.DirectionalLight(0xffaa66, 0.8);
-  sunLight.position.set(20, 30, 15);
+  const sunLight = new THREE.DirectionalLight(0x99aa88, 1.1);
+  sunLight.position.set(30, 22, 20);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(1024, 1024);
   sunLight.shadow.camera.near = 0.5;
-  sunLight.shadow.camera.far = 100;
-  sunLight.shadow.camera.left = -60;
-  sunLight.shadow.camera.right = 60;
-  sunLight.shadow.camera.top = 60;
-  sunLight.shadow.camera.bottom = -60;
+  sunLight.shadow.camera.far = 120;
+  sunLight.shadow.camera.left = -40;
+  sunLight.shadow.camera.right = 40;
+  sunLight.shadow.camera.top = 40;
+  sunLight.shadow.camera.bottom = -40;
   scene.add(sunLight);
-
-  const pointLight1 = new THREE.PointLight(0xff6600, 1.5, 30);
-  pointLight1.position.set(-10, 5, -10);
-  scene.add(pointLight1);
-
-  const pointLight2 = new THREE.PointLight(0xff6600, 1.5, 30);
-  pointLight2.position.set(10, 5, 10);
-  scene.add(pointLight2);
 
   // Gestione resize
   window.addEventListener('resize', onWindowResize);
@@ -85,6 +78,8 @@ const Render = {
   addToScene: (obj) => scene.add(obj),
   removeFromScene: (obj) => scene.remove(obj),
   getSize: () => ({ w: window.innerWidth, h: window.innerHeight }),
+  setCameraOffset: (v) => { dropOffset.copy(v); cameraLookAt.position.copy(v); },
+  getCameraOffset: () => dropOffset,
 };
 
 if (typeof window !== 'undefined') {
