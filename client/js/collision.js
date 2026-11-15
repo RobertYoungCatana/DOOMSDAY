@@ -79,7 +79,65 @@
     moveVertical(player, boxes, v.y * dt);
   }
 
-  const api = { move, overlaps, PLAYER_RADIUS: R, PLAYER_HEIGHT: H };
+  // Raggio contro le scatole solide e il terreno (per gli spari "hitscan").
+  // origin e dir: oggetti con x,y,z (dir lunga 1). Restituisce null oppure
+  // { distance, box, point:{x,y,z} } (box = null se colpisce il terreno).
+  // Il server puo' usare la stessa funzione per verificare i colpi.
+  function raycast(origin, dir, maxDist, map) {
+    const m = map || (typeof MAP !== 'undefined' ? MAP : null);
+    const boxes = m ? m.boxes : [];
+    const o = [origin.x, origin.y, origin.z];
+    const d = [dir.x, dir.y, dir.z];
+    let best = maxDist;
+    let hitBox = null;
+    let hit = false;
+
+    for (const b of boxes) {
+      if (b.solid === false) continue;
+      const y0 = b.y || 0;
+      const min = [b.x - b.w / 2, y0, b.z - b.d / 2];
+      const max = [b.x + b.w / 2, y0 + b.h, b.z + b.d / 2];
+      let tmin = 0;
+      let tmax = best;
+      let miss = false;
+      for (let i = 0; i < 3 && !miss; i++) {
+        if (Math.abs(d[i]) < 1e-9) {
+          if (o[i] < min[i] || o[i] > max[i]) miss = true;
+        } else {
+          let t1 = (min[i] - o[i]) / d[i];
+          let t2 = (max[i] - o[i]) / d[i];
+          if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+          if (t1 > tmin) tmin = t1;
+          if (t2 < tmax) tmax = t2;
+          if (tmin > tmax) miss = true;
+        }
+      }
+      if (!miss && tmin <= best) {
+        best = tmin;
+        hitBox = b;
+        hit = true;
+      }
+    }
+
+    // Terreno a y = 0
+    if (d[1] < -1e-9) {
+      const t = -o[1] / d[1];
+      if (t > 0 && t < best) {
+        best = t;
+        hitBox = null;
+        hit = true;
+      }
+    }
+
+    if (!hit) return null;
+    return {
+      distance: best,
+      box: hitBox,
+      point: { x: o[0] + d[0] * best, y: o[1] + d[1] * best, z: o[2] + d[2] * best },
+    };
+  }
+
+  const api = { move, overlaps, raycast, PLAYER_RADIUS: R, PLAYER_HEIGHT: H };
 
   if (typeof window !== 'undefined') window.collision = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -9,6 +9,7 @@
 const ARENA = CONFIG.ARENA;
 
 const arenaObjects = [];   // tutto cio' che aggiungiamo alla scena (per poterlo rimuovere)
+const pickupMeshes = [];   // oggetti raccoglibili (salute e munizioni)
 
 function addArenaObject(obj) {
   Render.addToScene(obj);
@@ -93,6 +94,35 @@ function buildLights() {
   });
 }
 
+// Oggetti raccoglibili: cubetti che ruotano (verde = salute, ambra = munizioni)
+function buildPickups() {
+  const geo = new THREE.BoxGeometry(0.45, 0.45, 0.45);
+  (MAP.pickups || []).forEach((pk) => {
+    const color = pk.type === 'health' ? 0x8d9a52 : 0xe2a823;
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: color }));
+    mesh.position.set(pk.x, pk.y + 0.6, pk.z);
+    mesh.userData = { type: pk.type, taken: false, respawnAt: 0, baseY: pk.y + 0.6 };
+    addArenaObject(mesh);
+    pickupMeshes.push(mesh);
+  });
+}
+
+// Fa ruotare e ondeggiare i pickup (chiamata dal loop di disegno)
+function animatePickups(timeSeconds) {
+  pickupMeshes.forEach((m, i) => {
+    m.rotation.y = timeSeconds * 1.6 + i;
+    m.position.y = m.userData.baseY + Math.sin(timeSeconds * 2 + i) * 0.08;
+  });
+}
+
+// Rimette tutti i pickup al loro posto (nuova partita)
+function resetPickups() {
+  pickupMeshes.forEach((m) => {
+    m.userData.taken = false;
+    m.visible = true;
+  });
+}
+
 function buildArena() {
   clearArena();
 
@@ -120,6 +150,7 @@ function buildArena() {
   ].forEach((mesh) => { if (mesh) addArenaObject(mesh); });
 
   buildLights();
+  buildPickups();
   console.log('Arena costruita da MAP:', MAP.boxes.length, 'scatole');
 }
 
@@ -129,12 +160,16 @@ function clearArena() {
     if (obj.geometry) obj.geometry.dispose();
   });
   arenaObjects.length = 0;
+  pickupMeshes.length = 0;
 }
 
 const Arena = {
   build: buildArena,
   clear: clearArena,
   getAll: () => arenaObjects,
+  getPickups: () => pickupMeshes,
+  animate: animatePickups,
+  resetPickups: resetPickups,
 };
 
 if (typeof window !== 'undefined') {

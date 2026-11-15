@@ -60,7 +60,7 @@ function createMainMenuHTML() {
       <p class="tagline">Tutti contro tutti nell'arena. Hai 2 minuti: vince chi fa più uccisioni.</p>
       <div id="nickname-container">
         <label for="nickname-input">Nickname <small>(massimo 12 caratteri)</small></label>
-        <input type="text" id="nickname-input" class="nickname-input" maxlength="12" placeholder="Sopravvissuto" autocomplete="off">
+        <input type="text" id="nickname-input" class="nickname-input" maxlength="12" placeholder="Player" autocomplete="off">
       </div>
       <button class="play-btn" id="play-btn">GIOCA</button>
       <button class="controls-btn" id="controls-btn">Controlli</button>
@@ -125,7 +125,7 @@ function updateHUD() {
   const hpPct = Math.max(0, Math.min(100, (p.health / CONFIG.GAME.STARTING_LIVES) * 100));
 
   document.getElementById('health-value').textContent = Math.round(p.health);
-  document.getElementById('ammo-value').textContent = p.magazine + ' / ' + p.ammo;
+  document.getElementById('ammo-value').textContent = p.reloadTimer > 0 ? 'Ricarica' : p.magazine + ' / ' + p.ammo;
   document.getElementById('timer-value').textContent = Math.max(0, Math.ceil(window.gameTimer));
 
   // Segnali per il CSS: barra della salute, salute bassa, caricatore quasi vuoto, ultimi 10 secondi
@@ -154,6 +154,7 @@ function beginMatch() {
 
   Player.spawn(spawn.x, spawn.z, spawn.y || 0);
   Player.resetKills();
+  if (Arena.resetPickups) Arena.resetPickups();
   Input.resetLook();
   Render.yawPivot().rotation.y = spawn.rot || 0;
   Render.pitchPivot().rotation.x = 0;
