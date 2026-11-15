@@ -1,18 +1,21 @@
 // DOOMSDAY - render.js
-// Scena 3D, camera, renderer, luci (atmosfera apocalittica).
+// Scena 3D, camera, renderer, luci. Atmosfera apocalittica: cielo polveroso grigio-arancione,
+// nebbia, sole basso e caldo con ombre lunghe.
+// Le luci puntiformi dei fuochi sono in shared/map.js (MAP.lights) e le crea arena.js.
 // Dipendenze: Three.js (globale), CONFIG (config.js)
 
 let scene, camera, renderer;
 let playerYaw, cameraLookAt;
-let dropOffset = new THREE.Vector3(0, 0, 0); // usato per l'animazione di caduta camera
+
+const SKY_COLOR = 0x7b5f4c;   // polvere e fumo
 
 function initRender(container) {
-  // 1. Scena & Atmosfera Apocalittica Verde "Post-Guerra"
+  // 1. Scena: cielo e nebbia dello stesso colore, cosi' l'orizzonte sparisce nella polvere
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x2a3025); // Cielo verdognolo scuro (atmosfera tossica)
-  scene.fog = new THREE.Fog(0x2a3025, 20, 80); // Nebbia più densa e verdastra
+  scene.background = new THREE.Color(SKY_COLOR);
+  scene.fog = new THREE.Fog(SKY_COLOR, 25, 95);
 
-  // ... (resto non modificato per brevità)
+  // 2. Camera
   camera = new THREE.PerspectiveCamera(
     CONFIG.CAMERA.FOV,
     window.innerWidth / window.innerHeight,
@@ -29,7 +32,7 @@ function initRender(container) {
   cameraLookAt = new THREE.Group();
   playerYaw.add(cameraLookAt);
 
-  // 5. Camera posizionata all'interno dei pivot
+  // 5. Camera dentro i pivot (la sua posizione locale resta 0,0,0)
   camera.position.set(0, 0, 0);
   cameraLookAt.add(camera);
 
@@ -41,23 +44,25 @@ function initRender(container) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // 7. Luci (Sole basso arancione + luce ambiente soffusa)
-  const ambientLight = new THREE.AmbientLight(0x404435, 0.5);
-  scene.add(ambientLight);
+  // 7. Luci
+  // Luce ambiente calda e polverosa + cielo/terra: niente zone completamente nere
+  scene.add(new THREE.AmbientLight(0x8a7060, 0.7));
+  scene.add(new THREE.HemisphereLight(0xc99a72, 0x2b2420, 0.45));
 
-  const sunLight = new THREE.DirectionalLight(0x99aa88, 1.1);
-  sunLight.position.set(30, 22, 20);
+  // Sole basso arancione: ombre lunghe
+  const sunLight = new THREE.DirectionalLight(0xffa35c, 1.05);
+  sunLight.position.set(-35, 18, 22);
   sunLight.castShadow = true;
-  sunLight.shadow.mapSize.set(1024, 1024);
-  sunLight.shadow.camera.near = 0.5;
-  sunLight.shadow.camera.far = 120;
-  sunLight.shadow.camera.left = -40;
-  sunLight.shadow.camera.right = 40;
-  sunLight.shadow.camera.top = 40;
-  sunLight.shadow.camera.bottom = -40;
+  sunLight.shadow.mapSize.set(2048, 2048);
+  sunLight.shadow.camera.near = 1;
+  sunLight.shadow.camera.far = 140;
+  sunLight.shadow.camera.left = -45;
+  sunLight.shadow.camera.right = 45;
+  sunLight.shadow.camera.top = 45;
+  sunLight.shadow.camera.bottom = -45;
+  sunLight.shadow.bias = -0.0005;
   scene.add(sunLight);
 
-  // Gestione resize
   window.addEventListener('resize', onWindowResize);
 }
 
@@ -78,8 +83,6 @@ const Render = {
   addToScene: (obj) => scene.add(obj),
   removeFromScene: (obj) => scene.remove(obj),
   getSize: () => ({ w: window.innerWidth, h: window.innerHeight }),
-  setCameraOffset: (v) => { dropOffset.copy(v); cameraLookAt.position.copy(v); },
-  getCameraOffset: () => dropOffset,
 };
 
 if (typeof window !== 'undefined') {
