@@ -150,7 +150,7 @@ function buildArena() {
   ].forEach((mesh) => { if (mesh) addArenaObject(mesh); });
 
   buildLights();
-  buildPickups();
+  // Gli oggetti raccoglibili non si disegnano qui: li manda il server (vedi network.js)
   console.log('Arena costruita da MAP:', MAP.boxes.length, 'scatole');
 }
 

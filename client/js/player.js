@@ -1,56 +1,81 @@
 // DOOMSDAY - player.js
-// Movimento FPS, armi (sparo hitscan, ricarica, cambio arma), oggetti raccoglibili,
-// effetti di sparo e arma in mano.
-// Dipendenze: Three.js, CONFIG, Render, Input, collision (collision.js), MAP, Arena
-//
-// Lo sparo e' "hitscan": un raggio dall'occhio verso il mirino, contro le scatole della mappa.
-// Per ora si vedono tracce e impatti. Quando ci sara' il server, basta impostare
-// Player.onShoot = (info) => ... per mandargli origine e direzione del colpo.
+// Movimento FPS, sparo, raccolta oggetti, effetti e arma in mano.
+// In multiplayer salute, scudo, munizioni e arma le decide il SERVER (Network.me()):
+// qui si legge soltanto, si mostra e si mandano al server spari e raccolte.
+// Dipendenze: Three.js, CONFIG, Render, Input, collision, MAP, Network
 
-// --- Stato del giocatore ---
+// --- Stato fisico del giocatore ---
 const player = {
-  id: '',                                   // verra' impostato dal multiplayer
+  id: '',
   position: new THREE.Vector3(0, 0, 0),     // posizione dei PIEDI
   velocity: new THREE.Vector3(0, 0, 0),
   onGround: false,
   isRunning: false,
-  ammo: CONFIG.GAME.STARTING_AMMO,          // riserva di munizioni (condivisa tra le armi)
-  magazine: 0,                              // colpi nel caricatore dell'arma corrente
-  mags: {},                                 // caricatore di ogni arma
-  health: CONFIG.GAME.STARTING_LIVES,
-  kills: 0,
-  deaths: 0,
-  currentWeapon: 'pistol',
+  dead: false,                              // eliminato: resta a guardare
   fireCooldown: 0,                          // secondi prima del prossimo colpo
-  reloadTimer: 0,                           // secondi alla fine della ricarica (0 = non ricarica)
 };
 
-// --- Parametri delle armi (non presenti in config.js) ---
-const AUTO_FIRE = { pistol: false, rifle: true, shotgun: false };   // tenere premuto = raffica
-const PELLETS = { pistol: 1, rifle: 1, shotgun: 7 };                 // pallini per colpo
-const SPREAD = { pistol: 0.004, rifle: 0.012, shotgun: 0.055 };      // dispersione (radianti)
-const MAX_RANGE = 100;                                               // metri
+// --- Parametri delle armi disponibili sul server ---
+const PELLETS = { pistol: 1, shotgun: 7 };                 // tracce disegnate per colpo
+const SPREAD = { pistol: 0.004, shotgun: 0.055 };          // dispersione visiva (radianti)
+const MAX_RANGE = 100;                                      // metri
 
-let triggerWasDown = false;   // per le armi a colpo singolo: un clic = un colpo
+let triggerWasDown = false;
+let interactWasDown = false;
+let collectCooldown = 0;
+let shownWeapon = '';
+
+// Arma attuale, decisa dal server (pistola di partenza, fucile a pompa se raccolto)
+function currentWeapon() {
+  const me = typeof Network !== 'undefined' ? Network.me() : null;
+  return me && CONFIG.WEAPONS[me.weapon] ? me.weapon : 'pistol';
+}
 
 // ---------------------------------------------------------------
 // Spawn
 // ---------------------------------------------------------------
+function overlapsSolid(x, y, z) {
+  const p = { x: x, y: y, z: z };
+  return MAP.boxes.some((b) => b.solid !== false && window.collision.overlaps(p, b));
+}
+
+// Il server sceglie lo spawn a caso e puo' cadere dentro un container: se succede,
+// si usa il punto di partenza libero piu' vicino della mappa.
+function safeSpawn(x, z) {
+  let sx = x;
+  let sz = z;
+  let sy = 0;
+  if (overlapsSolid(sx, 0, sz) || Math.abs(sx) > MAP.SIZE / 2 - 1 || Math.abs(sz) > MAP.SIZE / 2 - 1) {
+    let best = null;
+    MAP.spawnPoints.forEach((s) => {
+      if (overlapsSolid(s.x, s.y || 0, s.z)) return;
+      const d = Math.hypot(s.x - x, s.z - z);
+      if (!best || d < best.d) best = { s: s, d: d };
+    });
+    if (best) { sx = best.s.x; sz = best.s.z; sy = best.s.y || 0; }
+  }
+  return { x: sx, y: sy, z: sz, rot: Math.atan2(sx, sz) };   // guarda verso il centro
+}
+
 function spawnPlayer(x, z, y = 0) {
   const p = player;
   p.position.set(x, y, z);
   p.velocity.set(0, 0, 0);
   p.onGround = false;
-  p.health = CONFIG.GAME.STARTING_LIVES;
-  p.ammo = CONFIG.GAME.STARTING_AMMO;
-  Object.keys(CONFIG.WEAPONS).forEach((name) => { p.mags[name] = CONFIG.WEAPONS[name].magazine; });
-  p.magazine = p.mags[p.currentWeapon];
+  p.dead = false;
   p.fireCooldown = 0;
-  p.reloadTimer = 0;
   triggerWasDown = false;
+  interactWasDown = false;
+  collectCooldown = 0;
+  shownWeapon = '';
   clearEffects();
   applyViewModel();
   updatePlayerCamera();
+}
+
+function setDead(dead) {
+  player.dead = dead;
+  if (dead) player.velocity.set(0, player.velocity.y, 0);
 }
 
 // La camera segue i piedi + altezza occhi (cosi' si vede anche il salto)
@@ -119,12 +144,20 @@ function spawnFlash(point, size, color, ttl) {
   addEffect(m, ttl, size);
 }
 
+// Colpo di un altro giocatore (se il server lo inoltra con l'evento facoltativo playerShot)
+function showShot(from, to) {
+  const a = new THREE.Vector3(from.x, from.y, from.z);
+  const b = new THREE.Vector3(to.x, to.y, to.z);
+  spawnTracer(a, b);
+  spawnFlash(b, 0.14, 0xffe9b0, 0.15);
+}
+
 // ---------------------------------------------------------------
 // Arma in mano (modello semplice a scatole, sempre visibile sopra la scena)
 // ---------------------------------------------------------------
 let viewModel = null;
 let recoil = 0;
-const VIEW_LENGTH = { pistol: 0.26, rifle: 0.62, shotgun: 0.55 };
+const VIEW_LENGTH = { pistol: 0.26, shotgun: 0.55 };
 
 function ensureViewModel() {
   if (viewModel || !Render.camera()) return;
@@ -150,7 +183,8 @@ function ensureViewModel() {
 function applyViewModel() {
   ensureViewModel();
   if (!viewModel) return;
-  const name = player.currentWeapon;
+  const name = currentWeapon();
+  shownWeapon = name;
   const len = VIEW_LENGTH[name] || 0.4;
   const body = viewModel.userData.body;
   body.scale.set(1, 1, len / 0.4);
@@ -160,22 +194,19 @@ function applyViewModel() {
 
 function showViewModel(visible) {
   ensureViewModel();
-  if (viewModel) viewModel.visible = visible;
+  if (viewModel) viewModel.visible = visible && !player.dead;
 }
 
 function animateViewModel(dt) {
   if (!viewModel) return;
   recoil = Math.max(0, recoil - dt * 9);
-  const reloading = player.reloadTimer > 0 ? 1 : 0;
-  viewModel.position.set(0.24, -0.22 - 0.12 * reloading, -0.55 + recoil * 0.07);
-  viewModel.rotation.set(recoil * 0.1 - 0.5 * reloading, 0, 0);
+  viewModel.position.set(0.24, -0.22, -0.55 + recoil * 0.07);
+  viewModel.rotation.set(recoil * 0.1, 0, 0);
 }
 
 // ---------------------------------------------------------------
-// Armi: sparo, ricarica, cambio arma
+// Sparo: il client calcola dove cade il colpo, il server decide chi e' colpito
 // ---------------------------------------------------------------
-
-// Direzione di sparo da angoli yaw/pitch (con dispersione casuale)
 function aimDirection(yaw, pitch, spread) {
   const y = yaw + (Math.random() - 0.5) * 2 * spread;
   const pt = pitch + (Math.random() - 0.5) * 2 * spread;
@@ -184,20 +215,29 @@ function aimDirection(yaw, pitch, spread) {
 }
 
 function fire() {
-  const p = player;
-  const name = p.currentWeapon;
+  const name = currentWeapon();
   const w = CONFIG.WEAPONS[name];
-
-  p.magazine--;
-  p.fireCooldown = w.fireRate;
+  player.fireCooldown = w.fireRate;
   recoil = 1;
 
   const yaw = Render.yawPivot().rotation.y;
   const pitch = Render.pitchPivot().rotation.x;
-  const eye = new THREE.Vector3(p.position.x, p.position.y + CONFIG.CAMERA.HEIGHT, p.position.z);
+  const eye = new THREE.Vector3(player.position.x, player.position.y + CONFIG.CAMERA.HEIGHT, player.position.z);
 
-  // Punto da cui "esce" la traccia: a destra, un po' in basso e davanti all'occhio
+  // Raggio centrale: muri e terreno, poi gli altri giocatori se sono piu' vicini.
+  // Il server colpisce chi sta entro 2 m dal punto d'impatto, quindi se miro a un giocatore
+  // il punto d'impatto deve cadere SU di lui e non sul muro dietro.
   const center = aimDirection(yaw, pitch, 0);
+  const worldHit = window.collision.raycast(eye, center, MAX_RANGE);
+  const reach = worldHit ? worldHit.distance : MAX_RANGE;
+  const playerHit = Network.raycastPlayers(eye, center, reach);
+  const impact = playerHit ? playerHit.point
+    : worldHit ? worldHit.point
+    : { x: eye.x + center.x * MAX_RANGE, y: eye.y + center.y * MAX_RANGE, z: eye.z + center.z * MAX_RANGE };
+
+  Network.sendShoot({ x: impact.x, z: impact.z, y: impact.y, ox: eye.x, oy: eye.y, oz: eye.z });
+
+  // --- Solo grafica: lampo alla bocca e tracce ---
   const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
   const muzzle = eye.clone()
     .add(right.multiplyScalar(0.22))
@@ -205,109 +245,55 @@ function fire() {
     .add(center.clone().multiplyScalar(0.7));
   spawnFlash(muzzle, 0.18, 0xffb040, 0.05);
 
-  const pellets = PELLETS[name] || 1;
-  for (let i = 0; i < pellets; i++) {
+  const end = new THREE.Vector3(impact.x, impact.y, impact.z);
+  spawnTracer(muzzle, end);
+  if (worldHit || playerHit) spawnFlash(end, 0.14, 0xffe9b0, 0.15);
+
+  for (let i = 1; i < (PELLETS[name] || 1); i++) {
     const dir = aimDirection(yaw, pitch, SPREAD[name] || 0);
-    const hit = window.collision.raycast(eye, dir, MAX_RANGE);
-    const dist = hit ? hit.distance : MAX_RANGE;
-    const end = eye.clone().add(dir.clone().multiplyScalar(dist));
-    spawnTracer(muzzle, end);
-    if (hit) spawnFlash(end, 0.14, 0xffe9b0, 0.15);
+    const h = window.collision.raycast(eye, dir, MAX_RANGE);
+    const dist = h ? h.distance : MAX_RANGE;
+    spawnTracer(muzzle, eye.clone().add(dir.multiplyScalar(dist)));
   }
 
-  // Gancio per il multiplayer: origine e direzione del colpo
-  if (typeof Player !== 'undefined' && typeof Player.onShoot === 'function') {
-    Player.onShoot({
-      weapon: name,
-      origin: { x: eye.x, y: eye.y, z: eye.z },
-      yaw: yaw,
-      pitch: pitch,
-    });
-  }
+  if (playerHit && typeof window.hitMarker === 'function') window.hitMarker();
 }
 
-function startReload() {
-  const p = player;
-  const w = CONFIG.WEAPONS[p.currentWeapon];
-  if (p.reloadTimer > 0) return;                       // sta gia' ricaricando
-  if (p.magazine >= w.magazine || p.ammo <= 0) return; // pieno o niente riserva
-  p.reloadTimer = w.reloadTime;
-}
-
-function finishReload() {
-  const p = player;
-  const w = CONFIG.WEAPONS[p.currentWeapon];
-  const taken = Math.min(w.magazine - p.magazine, p.ammo);
-  p.magazine += taken;
-  p.ammo -= taken;
-  p.reloadTimer = 0;
-}
-
-function selectWeapon(index) {
-  const p = player;
-  const names = Object.keys(CONFIG.WEAPONS);
-  if (index < 0 || index >= names.length) return;
-  const name = names[index];
-  if (name === p.currentWeapon) return;
-
-  p.mags[p.currentWeapon] = p.magazine;   // salva il caricatore dell'arma che lascio
-  p.currentWeapon = name;
-  p.magazine = p.mags[name] !== undefined ? p.mags[name] : CONFIG.WEAPONS[name].magazine;
-  p.reloadTimer = 0;                      // cambiare arma interrompe la ricarica
-  p.fireCooldown = 0.25;                  // piccolo ritardo di estrazione
-  applyViewModel();
-}
-
-// Chiamata a ogni passo: cadenza di fuoco, ricarica, grilletto
 function updateWeapon(dt) {
-  const p = player;
-  if (p.fireCooldown > 0) p.fireCooldown -= dt;
+  const me = Network.me();
+  if (player.dead || !me || me.isDead) return;
 
-  if (p.reloadTimer > 0) {
-    p.reloadTimer -= dt;
-    if (p.reloadTimer <= 0) finishReload();
-  }
+  if (player.fireCooldown > 0) player.fireCooldown -= dt;
+  if (currentWeapon() !== shownWeapon) applyViewModel();
 
   const trigger = Input.isShooting();
   const clicked = trigger && !triggerWasDown;
   triggerWasDown = trigger;
+  if (!clicked || player.fireCooldown > 0) return;
 
-  if (Input.isReloading()) startReload();
-  if (p.reloadTimer > 0 || p.fireCooldown > 0) return;
-
-  const wants = AUTO_FIRE[p.currentWeapon] ? trigger : clicked;
-  if (!wants) return;
-
-  if (p.magazine > 0) fire();
-  else startReload();                      // caricatore vuoto: ricarica da solo
+  if (me.ammo > 0) fire();
+  else player.fireCooldown = 0.25;      // click a vuoto: il server avvisa con outOfAmmo
 }
 
 // ---------------------------------------------------------------
-// Oggetti raccoglibili (salute e munizioni), tornano dopo 20 secondi
+// Oggetti: si raccolgono con E quando si e' vicini (il server decide se vale)
 // ---------------------------------------------------------------
-function checkPickups() {
-  if (typeof Arena === 'undefined' || !Arena.getPickups) return;
-  const now = performance.now() / 1000;
-  const p = player;
+function updateInteract(dt) {
+  if (collectCooldown > 0) collectCooldown -= dt;
 
-  Arena.getPickups().forEach((m) => {
-    const u = m.userData;
-    if (u.taken) {
-      if (now >= u.respawnAt) { u.taken = false; m.visible = true; }
-      return;
-    }
-    if (p.position.distanceTo(m.position) > 1.5) return;
+  const near = player.dead ? null : Network.nearestItem(player.position);
+  if (typeof window.setPrompt === 'function') {
+    window.setPrompt(near ? 'E  ·  ' + near.name : '');
+  }
 
-    if (u.type === 'health') {
-      if (p.health >= CONFIG.GAME.STARTING_LIVES) return;    // salute piena: lascialo li'
-      p.health = Math.min(CONFIG.GAME.STARTING_LIVES, p.health + 25);
-    } else {
-      p.ammo = Math.min(p.ammo + 30, 120);
-    }
-    u.taken = true;
-    u.respawnAt = now + 20;
-    m.visible = false;
-  });
+  const pressed = Input.isInteracting();
+  const edge = pressed && !interactWasDown;
+  interactWasDown = pressed;
+
+  if (near && edge && collectCooldown <= 0) {
+    Network.collect(near.id);
+    collectCooldown = 0.3;
+  }
 }
 
 // ---------------------------------------------------------------
@@ -316,10 +302,10 @@ function checkPickups() {
 function updatePlayerMovement(dt) {
   if (!Render.yawPivot()) return;
 
-  player.isRunning = Input.isRunning();
+  player.isRunning = !player.dead && Input.isRunning();
 
-  // --- Velocita' desiderata dall'input ---
-  const move = Input.getMove();   // {x, z} gia' ruotato secondo la camera, lunghezza max 1
+  // --- Velocita' desiderata dall'input (da eliminati ci si ferma) ---
+  const move = player.dead ? { x: 0, z: 0 } : Input.getMove();
   const speed = player.isRunning ? CONFIG.MOVEMENT.RUN_SPEED : CONFIG.MOVEMENT.WALK_SPEED;
   const vx = move.x * speed;
   const vz = move.z * speed;
@@ -338,7 +324,7 @@ function updatePlayerMovement(dt) {
   player.velocity.y -= CONFIG.MOVEMENT.GRAVITY * dt;
 
   // --- Salto ---
-  if (Input.isJumping() && player.onGround) {
+  if (!player.dead && Input.isJumping() && player.onGround) {
     player.velocity.y = CONFIG.MOVEMENT.JUMP_FORCE;
     player.onGround = false;
   }
@@ -357,34 +343,23 @@ function updatePlayerMovement(dt) {
   updateWeapon(dt);
   updateEffects(dt);
   animateViewModel(dt);
-  checkPickups();
-}
-
-// Danni (per quando ci sara' il server): ritorna true se il giocatore muore
-function takeDamage(amount) {
-  const p = player;
-  p.health -= amount;
-  if (p.health > 0) return false;
-
-  p.health = 0;
-  p.deaths++;
-  const spawns = MAP.spawnPoints;
-  const spawn = spawns[Math.floor(Math.random() * spawns.length)];
-  setTimeout(() => spawnPlayer(spawn.x, spawn.z, spawn.y || 0), CONFIG.GAME.RESPAWN_TIME * 1000);
-  return true;
+  updateInteract(dt);
 }
 
 // --- Esporta ---
 const Player = {
   get: () => player,
   spawn: spawnPlayer,
+  safeSpawn: safeSpawn,
   update: updatePlayerMovement,
-  takeDamage: takeDamage,
-  reload: startReload,
-  selectWeapon: selectWeapon,
+  setDead: setDead,
   showViewModel: showViewModel,
-  resetKills: () => { player.kills = 0; player.deaths = 0; },
-  onShoot: null,   // gancio per il multiplayer
+  showShot: showShot,
+  // Il server gestisce: niente ricarica, cambio arma o danni locali
+  selectWeapon: () => {},
+  reload: () => {},
+  takeDamage: () => false,
+  resetKills: () => {},
 };
 
 if (typeof window !== 'undefined') {
