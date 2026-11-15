@@ -6,6 +6,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 
+// Mappa condivisa con il client: punti di partenza e posizioni degli oggetti
+const MAP = require('../client/js/shared/map.js');
+
 const app = express();
 app.use(cors());
 
@@ -44,20 +47,37 @@ function randomPos() {
     return { x: Math.random() * 30 - 15, z: Math.random() * 30 - 15 };
 }
 
+function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
 function alivePlayers() {
     return Object.values(players).filter(p => !p.isDead);
 }
 
 // ================= OGGETTI =================
+// Sceglie una posizione libera tra quelle della mappa (MAP.pickups), con la sua altezza
+function freeItemSlot() {
+    const used = Object.values(items).map(i => i.x + ',' + i.z);
+    const free = MAP.pickups.filter(p => !used.includes(p.x + ',' + p.z));
+    const list = free.length ? free : MAP.pickups;
+    return list[Math.floor(Math.random() * list.length)];
+}
+
 function spawnItem(id) {
     const itemId = id || `item_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const pos = randomPos();
+    const slot = freeItemSlot();
     items[itemId] = {
         id: itemId,
         type: ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)],
-        x: pos.x,
-        y: 0,
-        z: pos.z
+        x: slot.x,
+        y: slot.y,
+        z: slot.z
     };
     return items[itemId];
 }
@@ -91,11 +111,13 @@ function startMatch() {
     gameState = 'playing';
     resetItems();
 
-    Object.values(players).forEach((p) => {
-        const pos = randomPos();
-        p.x = pos.x;
-        p.y = 0;
-        p.z = pos.z;
+    const spawns = shuffle(MAP.spawnPoints);   // 8 punti, quanti i giocatori massimi
+    Object.values(players).forEach((p, i) => {
+        const s = spawns[i % spawns.length];
+        p.x = s.x;
+        p.y = s.y;
+        p.z = s.z;
+        p.rotation = s.rot;
         p.hp = 100;
         p.shield = 0;
         p.weapon = 'pistol';
@@ -247,7 +269,7 @@ io.on('connection', (socket) => {
     // Sparo: shootData.x / shootData.z = punto d'impatto calcolato dal client
     socket.on('playerShoot', (shootData) => {
         const shooter = players[socket.id];
-        if (gameState !== 'playing' || !shooter || shooter.isDead) return;
+        if (gameState !== 'playing' || !shooter || shooter.isDead || !shootData) return;
 
         if (shooter.ammo <= 0) {
             socket.emit('outOfAmmo');
@@ -256,6 +278,14 @@ io.on('connection', (socket) => {
 
         shooter.ammo -= 1;
         socket.emit('ammoUpdated', { ammo: shooter.ammo });
+
+        // Gli altri giocatori vedono la traccia del colpo (origine e punto d'impatto)
+        const t = [shootData.ox, shootData.oy, shootData.oz, shootData.x, shootData.y, shootData.z];
+        if (t.every(Number.isFinite)) {
+            socket.broadcast.emit('playerShot', {
+                id: shooter.id, ox: t[0], oy: t[1], oz: t[2], x: t[3], y: t[4], z: t[5]
+            });
+        }
 
         const bulletDamage = (shooter.weapon === 'shotgun') ? 50 : 25;
 
@@ -278,7 +308,7 @@ io.on('connection', (socket) => {
         if (gameState !== 'playing' || !player || !item || player.isDead) return;
 
         const dist = Math.hypot(player.x - item.x, player.z - item.z);
-        if (dist >= 2) return;
+        if (dist >= 2 || Math.abs(player.y - item.y) > 2) return;
 
         console.log(`🎁 ${player.name} ha raccolto ${item.type}!`);
 

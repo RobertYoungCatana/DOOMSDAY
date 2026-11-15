@@ -1,7 +1,7 @@
 // DOOMSDAY - main.js
 // Loop di gioco principale. Il loop parte SUBITO (cosi' dietro al menu si vede la mappa)
-// e parte UNA sola volta. Lo stato (MENU, PLAYING, PAUSED, ENDED) e' in menu.js.
-// Il tempo di partita e' UNO solo: window.gameTimer (lo imposta menu.js, lo scala update()).
+// e parte UNA sola volta. Lo stato (MENU, LOBBY, PLAYING, ...) e' in menu.js.
+// Non c'e' piu' un timer locale: la partita la gestisce il server (vince l'ultimo vivo).
 
 let lastTime = 0;
 let accumulator = 0;
@@ -19,9 +19,6 @@ function init() {
   Input.resetLook();
   initMenu();
 
-  // TODO rete: qui, in futuro, si collega il NetworkManager (lavoro del backend).
-  // Per mandare gli spari al server: Player.onShoot = (info) => socket.emit(...)
-
   requestAnimationFrame(loop);
 }
 
@@ -36,30 +33,29 @@ function update(dt) {
   yawPivot.rotation.y -= look.x;                 // mouse a destra = gira a destra
   pitchPivot.rotation.x = Math.max(-1.55, Math.min(1.55, pitchPivot.rotation.x - look.y));
 
-  // 2) Movimento, armi, pickup
+  // 2) Movimento, sparo, oggetti
   Player.update(dt);
 
-  // 3) Timer partita
-  window.gameTimer -= dt;
-  if (window.gameTimer <= 0) {
-    window.gameTimer = 0;
-    endGame();
-  }
+  // 3) Posizione verso il server (20 volte al secondo)
+  Network.tick(dt);
 }
 
-function render() {
+function render(frameDt) {
   const playing = currentMenuState === 'PLAYING';
+  const orbit = currentMenuState === 'MENU' || currentMenuState === 'CONNECTING' ||
+                currentMenuState === 'LOBBY' || currentMenuState === 'ENDED';
 
-  // Nel menu: la camera gira lentamente sopra la mappa
-  if (currentMenuState === 'MENU') {
+  // Menu, lobby e classifica: la camera gira lentamente sopra la mappa
+  if (orbit) {
     const yaw = Render.yawPivot();
     yaw.position.set(0, 16, 0);
     yaw.rotation.y += 0.003;
     Render.pitchPivot().rotation.x = -0.55;
   }
 
-  Player.showViewModel(playing);          // l'arma in mano si vede solo mentre si gioca
-  Arena.animate(performance.now() / 1000); // pickup che ruotano
+  Network.update(frameDt);                 // giocatori remoti e oggetti
+  Player.showViewModel(playing);           // l'arma in mano si vede solo mentre si gioca
+  Arena.animate(performance.now() / 1000);
   Render.renderer().render(Render.scene(), Render.camera());
 }
 
@@ -75,7 +71,7 @@ function loop(time) {
     accumulator -= FIXED_STEP;
   }
 
-  render();
+  render(dt);
   if (currentMenuState === 'PLAYING') updateHUD();
 
   requestAnimationFrame(loop);
