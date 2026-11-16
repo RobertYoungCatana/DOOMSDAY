@@ -1,0 +1,32 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOOMSDAY</title>
+  <link rel="stylesheet" href="doomsday.css">
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Quando il server sara' online, scrivi qui il suo indirizzo (togli i commenti):
+  <script>window.DOOMSDAY_SERVER_URL = "https://IL-TUO-SERVER.onrender.com";</script>
+  Altrimenti il gioco cerca il server sullo stesso computer della pagina, porta 3000.
+  In alternativa si puo' aggiungere ?server=http://indirizzo:3000 all'indirizzo della pagina. -->
+
+  <!-- Three.js da CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- I nostri file JS (ordine dipendenze) -->
+  <script src="js/config.js"></script>
+  <script src="js/shared/map.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/collision.js"></script>
+  <script src="js/arena.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/network.js"></script>
+  <script src="js/menu.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
