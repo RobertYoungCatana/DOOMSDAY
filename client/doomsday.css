@@ -712,3 +712,25 @@ button, input { font: inherit; }
   .lobby-names { grid-template-columns: 1fr; }
   .shield { left: 12px; bottom: 100px; min-width: 190px; }
 }
+
+
+
+.dmg-number {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  font: bold 26px Arial, sans-serif;
+  color: #ffcc00;
+  text-shadow: 0 0 4px #000, 0 2px 0 #000;
+  pointer-events: none;
+  z-index: 1000;
+  animation: dmg-rise 0.9s ease-out forwards;
+}
+.dmg-number.kill {
+  color: #ff4500;
+  font-size: 36px;
+}
+@keyframes dmg-rise {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  100% { opacity: 0; transform: translate(-50%, calc(-50% - 60px)) scale(1); }
+}

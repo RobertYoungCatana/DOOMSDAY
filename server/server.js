@@ -176,6 +176,22 @@ function damagePlayer(victim, amount, killer) {
     }
     victim.hp -= remaining;
 
+
+
+    // Conferma del colpo SOLO a chi ha sparato (serve per mostrare il danno)
+    if (killer) {
+        io.to(killer.id).emit('hitConfirmed', {
+            targetId: victim.id,
+            damage: amount,
+            x: victim.x,
+            y: victim.y,
+            z: victim.z,
+            killed: victim.hp <= 0
+        });
+    }
+
+    
+
     io.to(victim.id).emit('playerDamaged', { newHp: Math.max(0, victim.hp), newShield: victim.shield });
 
     if (victim.hp <= 0) {

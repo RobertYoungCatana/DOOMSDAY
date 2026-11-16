@@ -186,6 +186,7 @@ function setupNetworkHandlers() {
 
   Network.on('hurt', flashHurt);
   Network.on('kill', addKillFeed);
+  Network.on('hit', showDamageNumber);
 
   Network.on('eliminated', (killerName) => {
     Player.setDead(true);
@@ -310,6 +311,29 @@ function addKillFeed(e) {
   while (feed.children.length > 5) feed.removeChild(feed.firstChild);
   setTimeout(() => { if (row.parentNode) row.parentNode.removeChild(row); }, 6000);
 }
+
+
+
+// Numero del danno che sale sopra il bersaglio
+function showDamageNumber(d) {
+  if (currentMenuState !== 'PLAYING' || !d) return;
+
+  // Punto 3D sopra la testa del bersaglio (con un piccolo spostamento casuale)
+  const v = new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.4, d.y + 2.0, d.z);
+  v.project(Render.camera());          // da coordinate 3D a coordinate schermo
+  if (v.z > 1) return;                 // il bersaglio e' dietro la camera
+
+  const el = document.createElement('div');
+  el.className = 'dmg-number' + (d.killed ? ' kill' : '');
+  el.textContent = Math.round(d.damage);
+  el.style.left = ((v.x + 1) / 2 * window.innerWidth) + 'px';
+  el.style.top = ((1 - v.y) / 2 * window.innerHeight) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 900);
+}
+
+
+
 
 function lockPointer() {
   Render.renderer().domElement.requestPointerLock();

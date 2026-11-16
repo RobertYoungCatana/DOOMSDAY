@@ -184,6 +184,7 @@
       }
     });
     socket.on('killFeed', (e) => ui('kill', e));
+    socket.on('hitConfirmed', (d) => ui('hit', d));
 
     // Facoltativo: se il server inoltra gli spari degli altri, li disegniamo
     socket.on('playerShot', (d) => ui('shot', d));
