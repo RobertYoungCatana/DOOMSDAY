@@ -12,6 +12,7 @@ const mouse = {
 
 let gamepadIndex = -1;
 let gamepadConnected = false;
+let controllerSensitivity = CONFIG ? CONFIG.MOVEMENT.CONTROLLER_SENSITIVITY : 0.04;
 
 // --- Tastiera ---
 window.addEventListener('keydown', (e) => {
@@ -173,7 +174,7 @@ function getLook(dt = 1 / 60) {
 
   const gp = readGamepad();
   if (gp) {
-    const k = CONFIG.MOVEMENT.CONTROLLER_SENSITIVITY * 60 * dt;   // 0.04 rad per passo a stick tutto spinto
+    const k = controllerSensitivity * 60 * dt;   // rad per passo a stick tutto spinto
     x += gp.look.x * k;
     y += gp.look.y * k;
   }
@@ -190,6 +191,13 @@ const Input = {
   isInteracting: isInteracting,
   getMouseLocked: () => mouse.locked,
   resetLook: () => { mouse.x = 0; mouse.y = 0; },
+
+  // Impostazioni regolabili dal menu
+  getMouseSensitivity: () => mouse.sensitivity,
+  setMouseSensitivity: (v) => { mouse.sensitivity = v; },
+  getControllerSensitivity: () => controllerSensitivity,
+  setControllerSensitivity: (v) => { controllerSensitivity = v; },
+  isGamepadConnected: () => gamepadConnected,
 };
 
 if (typeof window !== 'undefined') {

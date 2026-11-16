@@ -220,6 +220,9 @@ function fire() {
   player.fireCooldown = w.fireRate;
   recoil = 1;
 
+  
+  if (window.GameAudio) window.GameAudio.playShot(name);
+
   const yaw = Render.yawPivot().rotation.y;
   const pitch = Render.pitchPivot().rotation.x;
   const eye = new THREE.Vector3(player.position.x, player.position.y + CONFIG.CAMERA.HEIGHT, player.position.z);

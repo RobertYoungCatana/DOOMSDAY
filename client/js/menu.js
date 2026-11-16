@@ -44,6 +44,7 @@ function initMenu() {
     <h2 id="pause-title">Pausa</h2>
     <p class="pause-note" id="pause-note">La partita continua: gli altri giocatori possono colpirti.</p>
     <button class="pause-btn" id="resume-btn">Riprendi</button>
+    <button class="pause-btn" id="pause-settings-btn">⚙ Impostazioni</button>
     <button class="pause-btn quit-btn" id="quit-to-main-btn">Esci dalla partita</button>
   `;
   pauseMenu.style.display = 'none';
@@ -61,6 +62,12 @@ function initMenu() {
   endMenu.style.display = 'none';
   document.body.appendChild(endMenu);
 
+  const settings = document.createElement('div');
+  settings.id = 'settings-overlay';
+  settings.innerHTML = createSettingsHTML();
+  settings.style.display = 'none';
+  document.body.appendChild(settings);
+
   setupMenuListeners();
   setupNetworkHandlers();
 
@@ -70,6 +77,7 @@ function initMenu() {
     if (saved) byId('nickname-input').value = saved;
   } catch (e) { /* localStorage non disponibile: pazienza */ }
 
+  loadSettings();
   refreshServerStatus();
   setInterval(() => { if (currentMenuState === 'MENU') refreshServerStatus(); }, 15000);
 }
@@ -77,6 +85,7 @@ function initMenu() {
 function createMainMenuHTML() {
   return `
     <div id="main-menu">
+      <button class="gear-btn" id="settings-btn" title="Impostazioni">⚙</button>
       <h1>DOOMSDAY</h1>
       <p class="tagline">Tutti contro tutti nell'arena. Non si rinasce: vince l'ultimo sopravvissuto.</p>
       <div id="nickname-container">
@@ -86,18 +95,6 @@ function createMainMenuHTML() {
       <p class="server-status" id="server-status">Controllo il server…</p>
       <p class="menu-error" id="menu-error"></p>
       <button class="play-btn" id="play-btn">GIOCA</button>
-      <button class="controls-btn" id="controls-btn">Controlli</button>
-      <div class="controls-help" id="controls-help">
-        <h3>Come si gioca</h3>
-        <ul>
-          <li><span class="key">W A S D</span>Muoviti</li>
-          <li><span class="key">Spazio</span>Salta</li>
-          <li><span class="key">Shift</span>Corri</li>
-          <li><span class="key">Click</span>Spara</li>
-          <li><span class="key">E</span>Raccogli</li>
-          <li><span class="key">Esc</span>Pausa</li>
-        </ul>
-      </div>
     </div>
   `;
 }
@@ -128,18 +125,63 @@ function createHUDHTML() {
   `;
 }
 
+function createSettingsHTML() {
+  return `
+    <div id="settings">
+      <h2>Impostazioni</h2>
+
+      <div class="settings-row">
+        <label for="sens-mouse">Sensibilità mouse</label>
+        <input type="range" id="sens-mouse" min="0.0005" max="0.006" step="0.0001">
+        <span class="sens-value" id="sens-mouse-value"></span>
+      </div>
+
+      <div class="settings-row">
+        <label for="sens-pad">Sensibilità controller</label>
+        <input type="range" id="sens-pad" min="0.01" max="0.12" step="0.005">
+        <span class="sens-value" id="sens-pad-value"></span>
+      </div>
+
+      <p class="pad-status" id="pad-status">Controller non collegato</p>
+
+      <h3>Comandi da tastiera</h3>
+      <ul class="settings-controls">
+        <li><span class="key">W A S D</span>Muoviti</li>
+        <li><span class="key">Spazio</span>Salta</li>
+        <li><span class="key">Shift</span>Corri</li>
+        <li><span class="key">Click</span>Spara</li>
+        <li><span class="key">E</span>Raccogli</li>
+        <li><span class="key">Esc</span>Pausa</li>
+      </ul>
+
+      <h3>Comandi da controller</h3>
+      <ul class="settings-controls">
+        <li><span class="key">Levetta sx</span>Muoviti</li>
+        <li><span class="key">Levetta dx</span>Guarda</li>
+        <li><span class="key">Grilletto dx</span>Spara</li>
+        <li><span class="key">A / Croce</span>Salta</li>
+        <li><span class="key">Grilletto sx</span>Corri</li>
+        <li><span class="key">Y / Triangolo</span>Raccogli</li>
+      </ul>
+
+      <button class="controls-btn" id="settings-close-btn">Chiudi</button>
+    </div>
+  `;
+}
+
 function setupMenuListeners() {
   byId('play-btn').addEventListener('click', () => {
+        if (window.GameAudio) window.GameAudio.initOnUserGesture();
     nickname = (byId('nickname-input').value.trim() || 'Sopravvissuto').substring(0, 16);
     try { localStorage.setItem('doomsday_nick', nickname); } catch (e) {}
     startGame();
   });
 
-  // Mostra/nasconde i controlli (controlla lo stile reale, anche se deciso dal CSS)
-  byId('controls-btn').addEventListener('click', () => {
-    const help = byId('controls-help');
-    help.style.display = getComputedStyle(help).display === 'none' ? 'block' : 'none';
-  });
+  byId('settings-btn').addEventListener('click', openSettings);
+  byId('pause-settings-btn').addEventListener('click', openSettings);
+  byId('settings-close-btn').addEventListener('click', closeSettings);
+  byId('sens-mouse').addEventListener('input', onMouseSensInput);
+  byId('sens-pad').addEventListener('input', onPadSensInput);
 
   byId('start-btn').addEventListener('click', () => Network.startGame());
   byId('lobby-leave-btn').addEventListener('click', () => leaveToMenu(''));
@@ -194,6 +236,7 @@ function setupNetworkHandlers() {
   });
 
   Network.on('shot', (d) => {
+    if (window.GameAudio && d) window.GameAudio.playShot(d.weapon);
     if (!d || d.id === Network.myId()) return;
     if ([d.ox, d.oy, d.oz, d.x, d.y, d.z].every(Number.isFinite)) {
       Player.showShot({ x: d.ox, y: d.oy, z: d.oz }, { x: d.x, y: d.y, z: d.z });
@@ -228,6 +271,67 @@ function refreshServerStatus() {
 function setMenuError(text) {
   const el = byId('menu-error');
   if (el) el.textContent = text;
+}
+
+// ---------------------------------------------------------------
+// Impostazioni: sensibilità mouse/controller (salvate nel browser) e stato controller
+// ---------------------------------------------------------------
+let padStatusTimer = null;
+
+function loadSettings() {
+  let mouseSens = Input.getMouseSensitivity();
+  let padSens = Input.getControllerSensitivity();
+  try {
+    const sm = localStorage.getItem('doomsday_sens_mouse');
+    const sp = localStorage.getItem('doomsday_sens_pad');
+    if (sm) mouseSens = parseFloat(sm);
+    if (sp) padSens = parseFloat(sp);
+  } catch (e) { /* localStorage non disponibile: si usano i valori di base */ }
+
+  Input.setMouseSensitivity(mouseSens);
+  Input.setControllerSensitivity(padSens);
+  byId('sens-mouse').value = mouseSens;
+  byId('sens-pad').value = padSens;
+  updateSensLabels();
+}
+
+function updateSensLabels() {
+  byId('sens-mouse-value').textContent = Number(byId('sens-mouse').value).toFixed(4);
+  byId('sens-pad-value').textContent = Number(byId('sens-pad').value).toFixed(3);
+}
+
+function onMouseSensInput() {
+  const v = parseFloat(byId('sens-mouse').value);
+  Input.setMouseSensitivity(v);
+  updateSensLabels();
+  try { localStorage.setItem('doomsday_sens_mouse', v); } catch (e) {}
+}
+
+function onPadSensInput() {
+  const v = parseFloat(byId('sens-pad').value);
+  Input.setControllerSensitivity(v);
+  updateSensLabels();
+  try { localStorage.setItem('doomsday_sens_pad', v); } catch (e) {}
+}
+
+function refreshPadStatus() {
+  const el = byId('pad-status');
+  if (!el) return;
+  el.textContent = Input.isGamepadConnected()
+    ? 'Controller collegato ✓'
+    : 'Controller non collegato (premi un tasto del controller per farlo riconoscere)';
+}
+
+// Si può aprire dal menu principale o dalla pausa: il pannello si mette sopra a tutto
+function openSettings() {
+  showEl('settings-overlay', 'flex');
+  refreshPadStatus();
+  padStatusTimer = setInterval(refreshPadStatus, 1000);
+}
+
+function closeSettings() {
+  showEl('settings-overlay', 'none');
+  if (padStatusTimer) { clearInterval(padStatusTimer); padStatusTimer = null; }
 }
 
 // ---------------------------------------------------------------
@@ -299,6 +403,28 @@ function flashClass(cls, ms) {
 function flashHurt() { flashClass('hurt', 250); }
 function hitMarker() { flashClass('hit', 130); }
 
+
+function showDamageNumber(d) {
+  if (currentMenuState !== 'PLAYING' || !d) return;
+
+  const v = new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.4, d.y + 2.0, d.z);
+  v.project(Render.camera());
+  if (v.z > 1) return;
+
+  if (d.headshot && window.GameAudio) window.GameAudio.playHeadshot();
+
+  const el = document.createElement('div');
+  el.className = 'dmg-number' + (d.headshot ? ' headshot' : '') + (d.killed ? ' kill' : '');
+  el.textContent = Math.round(d.damage) + (d.headshot ? ' HS' : '');
+  el.style.left = ((v.x + 1) / 2 * window.innerWidth) + 'px';
+  el.style.top = ((1 - v.y) / 2 * window.innerHeight) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 900);
+}
+
+
+
+
 function addKillFeed(e) {
   const feed = byId('killfeed');
   if (!feed) return;
@@ -311,29 +437,6 @@ function addKillFeed(e) {
   while (feed.children.length > 5) feed.removeChild(feed.firstChild);
   setTimeout(() => { if (row.parentNode) row.parentNode.removeChild(row); }, 6000);
 }
-
-
-
-// Numero del danno che sale sopra il bersaglio
-function showDamageNumber(d) {
-  if (currentMenuState !== 'PLAYING' || !d) return;
-
-  // Punto 3D sopra la testa del bersaglio (con un piccolo spostamento casuale)
-  const v = new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.4, d.y + 2.0, d.z);
-  v.project(Render.camera());          // da coordinate 3D a coordinate schermo
-  if (v.z > 1) return;                 // il bersaglio e' dietro la camera
-
-  const el = document.createElement('div');
-  el.className = 'dmg-number' + (d.killed ? ' kill' : '');
-  el.textContent = Math.round(d.damage);
-  el.style.left = ((v.x + 1) / 2 * window.innerWidth) + 'px';
-  el.style.top = ((1 - v.y) / 2 * window.innerHeight) + 'px';
-  document.body.appendChild(el);
-  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 900);
-}
-
-
-
 
 function lockPointer() {
   Render.renderer().domElement.requestPointerLock();

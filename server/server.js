@@ -32,6 +32,7 @@ const MAP_LIMIT = 50;                // le posizioni oltre +/- questo valore ven
 const FIRST_DEATH_ENDS_MATCH = false; // true = la partita finisce alla PRIMA morte
                                       // false = finisce quando resta un solo sopravvissuto
 const HIT_RADIUS = 2;                // distanza massima (dal punto dello sparo) per colpire un giocatore
+const HEAD_HEIGHT = 1.4;             // altezza minima dai piedi del bersaglio perche' il colpo sia alla testa
 const MAX_ITEMS = 5;
 const ITEM_RESPAWN_MS = 15000;
 const LOBBY_RETURN_MS = 8000;        // dopo il game over, torna alla lobby dopo 8 secondi
@@ -167,7 +168,7 @@ function checkEndOfMatch(lastKiller) {
 }
 
 // Applica danno (prima lo scudo, poi la vita). Ritorna true se il giocatore muore.
-function damagePlayer(victim, amount, killer) {
+function damagePlayer(victim, amount, killer, headshot) {
     let remaining = amount;
     if (victim.shield > 0) {
         const absorbed = Math.min(victim.shield, remaining);
@@ -186,7 +187,9 @@ function damagePlayer(victim, amount, killer) {
             x: victim.x,
             y: victim.y,
             z: victim.z,
-            killed: victim.hp <= 0
+            killed: victim.hp <= 0,
+            headshot: !!headshot
+
         });
     }
 
@@ -291,28 +294,40 @@ io.on('connection', (socket) => {
             socket.emit('outOfAmmo');
             return;
         }
+        
 
         shooter.ammo -= 1;
         socket.emit('ammoUpdated', { ammo: shooter.ammo });
 
-        // Gli altri giocatori vedono la traccia del colpo (origine e punto d'impatto)
-        const t = [shootData.ox, shootData.oy, shootData.oz, shootData.x, shootData.y, shootData.z];
-        if (t.every(Number.isFinite)) {
-            socket.broadcast.emit('playerShot', {
-                id: shooter.id, ox: t[0], oy: t[1], oz: t[2], x: t[3], y: t[4], z: t[5]
-            });
-        }
+                // Avvisa tutti gli altri che questo giocatore ha sparato (per suono e tracce visive)
+        socket.broadcast.emit('playerShot', {
+            id: shooter.id,
+            weapon: shooter.weapon,
+            ox: shootData.ox,
+            oy: shootData.oy,
+            oz: shootData.oz,
+            x: shootData.x,
+            y: shootData.y,
+            z: shootData.z
+        });
 
-        const bulletDamage = (shooter.weapon === 'shotgun') ? 50 : 25;
+
+
+
+        const baseDamage = (shooter.weapon === 'shotgun') ? 50 : 15;
 
         Object.values(players).forEach((target) => {
             if (target.id === shooter.id || target.isDead) return;
 
             const dist = Math.hypot(target.x - shootData.x, target.z - shootData.z);
-            if (dist < HIT_RADIUS) {
-                console.log(`🎯 ${shooter.name} ha colpito ${target.name} (${shooter.weapon})`);
-                damagePlayer(target, bulletDamage, shooter);
-            }
+            if (dist >= HIT_RADIUS) return;
+
+            const relativeHeight = Number.isFinite(shootData.y) ? shootData.y - target.y : 0;
+            const headshot = relativeHeight >= HEAD_HEIGHT;
+            const bulletDamage = headshot ? baseDamage * 2 : baseDamage;
+
+            console.log(`🎯 ${shooter.name} ha colpito ${target.name} (${shooter.weapon}${headshot ? ', HEADSHOT' : ''})`);
+            damagePlayer(target, bulletDamage, shooter, headshot);
         });
     });
 
