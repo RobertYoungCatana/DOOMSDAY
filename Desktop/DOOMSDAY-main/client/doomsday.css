@@ -734,3 +734,414 @@ button, input { font: inherit; }
   15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
   100% { opacity: 0; transform: translate(-50%, calc(-50% - 60px)) scale(1); }
 }
+
+
+
+.gear-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid #555;
+  background: rgba(0,0,0,0.4);
+  color: #e6dfca;
+  font-size: 20px;
+  cursor: pointer;
+}
+.gear-btn:hover { background: rgba(255,69,0,0.25); }
+
+#settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.7);
+}
+#settings {
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 24px 28px;
+  max-width: 420px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #e6dfca;
+}
+#settings h2 { margin-top: 0; color: #ff4500; }
+#settings h3 { margin: 18px 0 8px; font-size: 15px; color: #ffcc00; }
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+.settings-row label { flex: 1; font-size: 14px; }
+.settings-row input[type="range"] { flex: 2; }
+.sens-value { width: 50px; text-align: right; font-size: 12px; color: #999; }
+.pad-status { font-size: 13px; color: #8d9a52; margin: 10px 0; }
+.settings-controls { list-style: none; padding: 0; margin: 0; }
+.settings-controls li {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  padding: 4px 0;
+}
+.settings-controls .key {
+  background: #333;
+  border-radius: 4px;
+  padding: 2px 8px;
+  min-width: 80px;
+  text-align: center;
+}
+/* DOOMSDAY identity refresh */
+:root {
+  --ash:#171c18; --ash-deep:#090d0b; --slate:#39443a; --bone:#d7ddcf; --bone-dim:#929d8d;
+  --rust:#a8e600; --rust-hot:#c4ff19; --olive:#82a84c; --amber:#b9d96a; --blood:#e14e3e;
+  --font-display:"Bahnschrift Condensed","Arial Narrow",Impact,sans-serif;
+  --font-ui:"Bahnschrift","Segoe UI",system-ui,sans-serif;
+  --hazard:repeating-linear-gradient(-45deg,#51613b 0 14px,#171c18 14px 28px);
+}
+#menu-overlay { background:linear-gradient(90deg,rgba(8,12,10,.97),rgba(11,16,12,.83) 40%,rgba(10,16,12,.15) 100%),radial-gradient(ellipse at 75% 50%,transparent 25%,rgba(0,0,0,.58)); }
+:root { --ash:#121612; --ash-deep:#070a08; --slate:#30382f; }
+#pause-menu,#end-menu,#settings-overlay,#lobby-overlay { background-color:rgba(15,19,15,.97); }
+#main-menu { gap:15px; }
+#main-menu::before { background:linear-gradient(90deg,#a8e600,rgba(168,230,0,.08)); }
+.brand-logo { display:block;width:min(100%,500px);height:auto;max-height:150px;object-fit:contain;object-position:left center;filter:drop-shadow(0 0 18px rgba(140,255,0,.16)); }
+.play-btn { background:#a8e600;color:#10150b;box-shadow:0 8px 30px rgba(116,181,0,.18); }
+.play-btn:hover { background:#c4ff19;box-shadow:0 0 28px rgba(168,230,0,.3); }
+.nickname-input { border-left-color:#a8e600; }
+.nickname-input:focus { border-left-color:#c4ff19;box-shadow:0 0 0 2px #82a84c; }
+.crosshair { background:#a8e600;filter:drop-shadow(0 0 5px #a8e600); }
+.crosshair::before,.crosshair::after { background:linear-gradient(90deg,#d7ddcf 0 11px,transparent 11px 23px,#d7ddcf 23px 34px); }
+#loading-screen { position:fixed;inset:0;z-index:300;display:grid;place-content:center;justify-items:center;gap:22px;background:radial-gradient(ellipse at 50% 58%,rgba(55,75,47,.3),transparent 48%),linear-gradient(180deg,rgba(6,10,8,.97),rgba(15,22,16,.96));overflow:hidden; }
+#loading-screen::before { content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(160,220,120,.035) 6px 7px);animation:scan 4s linear infinite; }
+#loading-screen::after { content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 20% 32%,rgba(175,255,120,.24) 0 1px,transparent 2px),radial-gradient(circle at 78% 66%,rgba(175,255,120,.2) 0 1px,transparent 2px); }
+.loading-logo { width:min(78vw,720px);height:auto;animation:logoPulse 3s ease-in-out infinite;filter:drop-shadow(0 0 18px rgba(115,255,0,.25)); }
+#loading-screen p { margin:4px 0;color:#a8b29f;font-size:13px;letter-spacing:.22em;text-transform:uppercase; }
+.loading-status { color:#9ee600;font:600 11px var(--font-ui);letter-spacing:.24em;animation:statusPulse 1.4s ease-in-out infinite; }
+#hud { text-shadow:0 2px 8px #000; }
+@keyframes scan { from{transform:translateY(-10px)} to{transform:translateY(10px)} }
+@keyframes logoPulse { 0%,100%{transform:scale(.985);filter:drop-shadow(0 0 12px rgba(115,255,0,.18))} 50%{transform:scale(1.015);filter:drop-shadow(0 0 28px rgba(115,255,0,.5))} }
+@keyframes statusPulse { 50%{opacity:.48} }
+@media(max-width:760px){.brand-logo{object-position:center}#main-menu{margin:auto}#loading-screen p{font-size:10px;letter-spacing:.12em}}
+
+/* Interstitial: logo only, black void, military green signal breakup. */
+#loading-screen { background:#000 !important;place-content:center;gap:18px; }
+#loading-screen::before { inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(88,112,55,.12) 4px,transparent 5px 8px);animation:loading-scan 2.8s linear infinite; }
+#loading-screen::after { inset:0;background:linear-gradient(90deg,transparent 0 12%,rgba(87,111,54,.08) 12.1% 12.4%,transparent 12.5% 82%,rgba(87,111,54,.06) 82.1% 82.5%,transparent 82.6%); }
+.loading-mark { position:relative;width:min(78vw,760px); }
+.loading-logo { display:block;position:relative;width:100%;height:auto;animation:logo-flicker 3.8s steps(1,end) infinite;filter:drop-shadow(0 0 7px rgba(92,125,49,.22)); }
+.loading-mark::before,.loading-mark::after { content:"";position:absolute;inset:0;background:url("assets/doomsday-logo.png") center/contain no-repeat;pointer-events:none;opacity:0; }
+.loading-mark::before { filter:sepia(1) saturate(2) hue-rotate(35deg);mix-blend-mode:screen;animation:glitch-a 4.2s steps(1,end) infinite; }
+.loading-mark::after { filter:sepia(1) saturate(1.5) hue-rotate(50deg);mix-blend-mode:screen;animation:glitch-b 5.1s steps(1,end) infinite; }
+#loading-screen p { margin:0;color:#78836b;font-size:11px;letter-spacing:.2em;text-transform:none; }
+@keyframes loading-scan { from{transform:translateY(-10px)}to{transform:translateY(10px)} }
+@keyframes logo-flicker { 0%,88%,91%,96%,100%{opacity:1}89%{opacity:.72}90%{opacity:.94}94%{opacity:.58}95%{opacity:1} }
+@keyframes glitch-a { 0%,86%,89%,100%{opacity:0;clip-path:inset(0 0 100% 0);transform:translate(0)}87%{opacity:.62;clip-path:inset(30% 0 48% 0);transform:translate(-7px,1px)}88%{opacity:.34;clip-path:inset(65% 0 22% 0);transform:translate(6px,-1px)} }
+@keyframes glitch-b { 0%,73%,76%,100%{opacity:0;clip-path:inset(100% 0 0 0);transform:translate(0)}74%{opacity:.5;clip-path:inset(54% 0 34% 0);transform:translate(8px,0)}75%{opacity:.3;clip-path:inset(18% 0 69% 0);transform:translate(-5px,1px)} }
+
+/* First launch interstitial */
+#boot-screen { position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;background:#030504;transition:opacity .28s ease,visibility .28s ease; }
+#boot-screen.boot-screen-done { opacity:0;visibility:hidden;pointer-events:none; }
+.boot-mark { width:min(70vw,680px); }
+.boot-mark .loading-logo { animation:logo-flicker 2.6s steps(1,end) infinite;filter:drop-shadow(0 0 10px rgba(118,177,53,.32)); }
+.boot-progress { width:min(54vw,460px);height:5px;background:#20251d;border:1px solid #30392a;overflow:hidden; }
+.boot-progress span { display:block;width:0;height:100%;background:#8cce3a;box-shadow:0 0 12px rgba(140,206,58,.62);animation:boot-load 3s linear forwards; }
+@keyframes boot-load { to { width:100%; } }
+
+/* =====================================================================
+   SCELTA DEL PERSONAGGIO (skin) - a destra del menu principale
+   Stessa palette del tema: --ash, --slate, --bone, --rust (verde), --hazard
+   ===================================================================== */
+#skin-panel {
+  margin-left: auto;
+  width: min(330px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 14px;
+  box-sizing: border-box;
+  background: rgba(15, 19, 15, 0.86);
+  border-left: 4px solid var(--rust);
+}
+#skin-panel::before {
+  content: "";
+  display: block;
+  height: 8px;
+  margin: -16px -18px 4px;
+  background: var(--hazard);
+}
+.skin-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--bone);
+}
+.skin-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 85%, rgba(168, 230, 0, 0.14), transparent 60%), rgba(18, 22, 18, 0.9);
+  border: 1px solid var(--slate);
+}
+#skin-preview { width: 220px; height: 288px; }
+.skin-loading {
+  position: absolute;
+  left: 0; right: 0; bottom: 12px;
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--bone-dim);
+  pointer-events: none;
+}
+.skin-arrow {
+  appearance: none;
+  flex: none;
+  width: 34px;
+  height: 64px;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1;
+  color: var(--bone);
+  background: transparent;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+.skin-arrow:hover { color: var(--rust-hot); background: rgba(255, 255, 255, 0.04); }
+.skin-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--rust-hot);
+}
+.skin-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.skin-card {
+  appearance: none;
+  cursor: pointer;
+  padding: 9px 12px;
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.03em;
+  color: var(--bone);
+  background: var(--ash);
+  border: 0;
+  border-left: 4px solid var(--slate);
+  transition: transform 0.12s ease, background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.skin-card:hover { color: var(--rust-hot); border-left-color: var(--rust); transform: translateX(4px); }
+.skin-card.selected {
+  color: #10150b;
+  background: var(--rust);
+  border-left-color: var(--rust-hot);
+}
+.skin-card:focus-visible,
+.skin-arrow:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--amber); }
+.skin-credit { margin: 0; font-size: 11px; color: var(--bone-dim); }
+
+@media (max-width: 760px) {
+  #menu-overlay { flex-wrap: wrap; overflow-y: auto; padding-top: 20px; padding-bottom: 20px; }
+  #skin-panel { margin: 0 auto; }
+}
+@media (max-height: 640px) {
+  #skin-preview { width: 170px; height: 222px; }
+}
+
+/* =====================================================================
+   MIRINO DINAMICO
+   Lo spazio al centro (--ch-gap) segue la dispersione dell'arma e si stringe mirando
+   (tasto destro / grilletto sinistro); anche le stanghette (--ch-len) si accorciano.
+   I valori li aggiorna menu.js; a riposo restano quelli di prima (6px + 11px).
+   ===================================================================== */
+.crosshair { --ch-gap: 6px; --ch-len: 11px; }
+.crosshair::before {
+  width: calc(2 * var(--ch-len) + 2 * var(--ch-gap));
+  height: 2px;
+  background: linear-gradient(90deg, #d7ddcf 0 var(--ch-len), transparent var(--ch-len) calc(100% - var(--ch-len)), #d7ddcf calc(100% - var(--ch-len)) 100%);
+}
+.crosshair::after {
+  width: 2px;
+  height: calc(2 * var(--ch-len) + 2 * var(--ch-gap));
+  background: linear-gradient(180deg, #d7ddcf 0 var(--ch-len), transparent var(--ch-len) calc(100% - var(--ch-len)), #d7ddcf calc(100% - var(--ch-len)) 100%);
+}
+#hud.aiming .crosshair { filter: drop-shadow(0 0 3px #a8e600); }
+
+/* Server online ma da aggiornare (versione vecchia): pallino e testo ambra */
+.server-status.outdated { color: var(--amber); }
+.server-status.outdated::before { background: var(--amber); }
+
+/* =====================================================================
+   SCELTA DEL PERSONAGGIO: pulsante SELEZIONA, spunta sulla scheda scelta,
+   pannello anche nella lobby, personaggio accanto ai nomi, pulsante della musica
+   ===================================================================== */
+.skin-select-btn {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  padding: 11px 16px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-align: left;
+  color: #10150b;
+  background: var(--rust);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+  transition: background-color 0.12s ease, transform 0.12s ease, color 0.12s ease;
+}
+.skin-select-btn:hover:not(:disabled) { background: var(--rust-hot); transform: translateX(4px); }
+.skin-select-btn:disabled { cursor: default; color: var(--rust-hot); background: rgba(168, 230, 0, 0.12); }
+.skin-select-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--amber); }
+.skin-select-btn.flash { animation: skin-confirm 0.6s ease-out; }
+@keyframes skin-confirm { 0% { filter: brightness(2.2); } 100% { filter: brightness(1); } }
+.skin-chosen { margin: -4px 0 0; font-size: 14px; color: var(--bone-dim); }
+
+/* scheda che si sta guardando: bordo verde · scheda scelta: piena, con la spunta */
+.skin-card.selected { color: var(--rust-hot); background: var(--ash); border-left-color: var(--rust); box-shadow: inset 0 0 0 2px var(--rust); }
+.skin-card.chosen { color: #10150b; background: var(--rust); border-left-color: var(--rust-hot); }
+.skin-card.chosen::before { content: "✓ "; }
+.skin-card.chosen.selected { box-shadow: inset 0 0 0 2px var(--rust-hot); }
+.skin-credit:empty { display: none; }
+
+/* lobby: accanto a ogni nome, il personaggio scelto */
+.lobby-names li { display: flex; flex-direction: column; gap: 2px; }
+.lobby-player { overflow: hidden; text-overflow: ellipsis; }
+.lobby-skin { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--rust-hot); }
+
+/* pulsante della musica (accanto all'ingranaggio nel menu, in alto a destra nella lobby) */
+.music-btn { font-size: 19px; }
+#main-menu .music-btn { right: 64px; }
+#lobby-overlay .music-btn { right: 14px; }
+.music-btn.off { color: var(--bone-dim); opacity: 0.65; }
+.music-btn.off::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: 50%;
+  height: 2px;
+  background: var(--blood);
+  transform: rotate(-45deg);
+}
+
+@media (max-height: 760px) {
+  #skin-preview { width: 190px; height: 248px; }
+}
+@media (max-width: 760px) {
+  #lobby-overlay { flex-wrap: wrap; overflow-y: auto; padding-top: 20px; padding-bottom: 20px; }
+  #lobby-overlay #skin-panel { margin: 0 auto; }
+}
+@media (max-height: 640px) {
+  #skin-preview { width: 170px; height: 222px; }
+}
+
+/* =====================================================================
+   IMPOSTAZIONI A SCHEDE: Tastiera e mouse · Controller · Generale
+   ===================================================================== */
+#settings { max-width: 500px; }
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 6px;
+  border-bottom: 1px solid var(--slate);
+}
+.settings-tab {
+  appearance: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  padding: 9px 12px 7px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--bone-dim);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.03em;
+  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+.settings-tab:hover { color: var(--rust-hot); background: rgba(255, 255, 255, 0.04); }
+.settings-tab.active { color: var(--rust-hot); border-bottom-color: var(--rust); }
+.settings-panel[hidden] { display: none; }
+.settings-panel h3:first-child { margin-top: 12px; }
+.settings-row { padding: 4px 6px; margin: 8px -6px; border-left: 3px solid transparent; }
+.settings-row:focus-within { background: rgba(168, 230, 0, 0.07); border-left-color: var(--rust); }
+.sens-value { width: 54px; font-size: 13px; color: var(--bone); }
+.settings-hint { margin: 2px 0 6px; font-size: 12px; line-height: 1.4; color: var(--bone-dim); }
+.settings-panel .settings-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.settings-panel .settings-controls li { align-items: center; }
+.settings-panel .settings-controls .key { min-width: 0; flex: none; }
+@media (max-width: 520px) { .settings-panel .settings-controls { grid-template-columns: 1fr; } }
+#settings-close-btn { margin-top: 16px; }
+
+/* =====================================================================
+   SELEZIONE COL CONTROLLER O CON LE FRECCE (menunav.js mette .nav-focus)
+   ===================================================================== */
+.nav-focus { outline: none !important; box-shadow: inset 0 0 0 3px var(--amber) !important; }
+.pause-btn.nav-focus,
+.controls-btn.nav-focus {
+  color: var(--rust-hot);
+  border-left-color: var(--rust);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(6px);
+}
+.play-btn.nav-focus { background: var(--rust-hot); transform: translateX(8px); }
+.settings-tab.nav-focus { color: var(--rust-hot); background: rgba(255, 255, 255, 0.06); }
+.gear-btn.nav-focus { box-shadow: 0 0 0 3px var(--amber) !important; }
+.skin-arrow.nav-focus { color: var(--rust-hot); }
+input[type="range"].nav-focus,
+input[type="range"]:focus-visible { box-shadow: none !important; outline: 2px solid var(--amber) !important; outline-offset: 4px; }
+
+/* =====================================================================
+   PERSONAGGI: 15 schede su tre colonne (scorre se lo schermo e' basso)
+   ===================================================================== */
+#skin-panel { width: min(360px, 100%); }
+.skin-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 28vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 4px 2px 0;
+}
+.skin-card {
+  padding: 7px 6px 7px 8px;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  border-left-width: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.skin-card:hover { transform: none; }
+
+/* Avviso sotto la scelta del personaggio: il server online e' da aggiornare */
+.skin-warning {
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--bone);
+  background: rgba(226, 168, 35, 0.14);
+  border-left: 3px solid #e2a823;
+}
+.skin-warning:empty { display: none; }

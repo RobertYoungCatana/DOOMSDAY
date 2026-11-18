@@ -69,9 +69,19 @@
 
   // Integra la velocita' del giocatore e risolve le collisioni.
   // La gravita' va applicata PRIMA (ogni frame), cosi' onGround resta stabile.
+  // Le decorazioni non bloccano: l'elenco delle sole scatole solide si calcola una volta per mappa
+  function solidBoxes(m) {
+    if (!m) return [];
+    if (!m._solid || m._solidCount !== m.boxes.length) {
+      m._solid = m.boxes.filter((b) => b.solid !== false);
+      m._solidCount = m.boxes.length;
+    }
+    return m._solid;
+  }
+
   function move(player, dt, map) {
     const m = map || (typeof MAP !== 'undefined' ? MAP : null);
-    const boxes = m ? m.boxes : [];
+    const boxes = solidBoxes(m);
     const v = player.velocity;
 
     moveHorizontal(player, boxes, 'x', v.x * dt);
@@ -85,7 +95,7 @@
   // Il server puo' usare la stessa funzione per verificare i colpi.
   function raycast(origin, dir, maxDist, map) {
     const m = map || (typeof MAP !== 'undefined' ? MAP : null);
-    const boxes = m ? m.boxes : [];
+    const boxes = solidBoxes(m);
     const o = [origin.x, origin.y, origin.z];
     const d = [dir.x, dir.y, dir.z];
     let best = maxDist;

@@ -17,7 +17,10 @@
 
   const SEND_INTERVAL = 1 / ((CONFIG.NETWORK && CONFIG.NETWORK.UPDATE_RATE) || 20);
   const PLAYER_COLORS = [0xc4561c, 0x8d9a52, 0x5a8aa8, 0xb89a2e, 0x8c4a2b, 0x7a2f26, 0x6e6b64, 0x9a6fb0];
-  const ITEM_NAMES = { medkit: 'Medikit', ammo: 'Munizioni', shotgun: 'Fucile a pompa', armor: 'Giubbotto' };
+  const ITEM_NAMES = { medkit: 'Medikit', ammo: 'Munizioni', armor: 'Giubbotto' };   // le armi prendono il nome da CONFIG.WEAPONS
+  // Colore dell'alone a terra sotto gli oggetti: cure, munizioni, scudo, armi
+  const ITEM_GLOW = { medkit: 0x82a84c, ammo: 0xe2a823, armor: 0x5a8aa8 };
+  const WEAPON_GLOW = 0xa8e600;
   const HIT_R = 0.35;     // raggio del corpo di un giocatore per i colpi
   const HIT_H = 1.8;      // altezza del corpo
   const PICKUP_RANGE = 1.9;   // il server accetta fino a 2 metri
@@ -27,12 +30,17 @@
     joined: false,
     leaving: false,
     myId: null,
+    name: '',                         // nickname e personaggio con cui si e' entrati (per rientrare)
+    skin: null,
+    serverVersion: null,              // versione del server online (null = non ancora controllata)
     phase: 'offline',                 // offline | lobby | playing | ended
     lobby: { state: 'lobby', playerCount: 0, minPlayers: 2, maxPlayers: 8, names: [] },
     players: {},                      // tutti i giocatori (me compreso), come li manda il server
     items: {},                        // oggetti sulla mappa, come li manda il server
-    remotes: {},                      // id -> { group, target }
-    itemMeshes: {},                   // id -> { group, baseY }
+    remotes: {},                      // id -> { group, target, socket, weapon }
+    itemMeshes: {},                   // id -> { group, spin }
+    pendingShots: 0,                  // colpi mandati a cui il server non ha ancora risposto
+    lastShotAt: 0,
     worldVisible: false,
     sendTimer: 0,
     keepAlive: 0,
@@ -62,7 +70,11 @@
     const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, 15000);
     fetch(serverUrl() + '/', ctrl ? { signal: ctrl.signal } : undefined)
       .then((r) => r.json())
-      .then((j) => { clearTimeout(timer); cb({ online: true, players: j.players }); })
+      .then((j) => {
+        clearTimeout(timer);
+        st.serverVersion = Number(j.version) || 0;     // i server vecchi non la mandano: 0
+        cb({ online: true, players: j.players, version: j.version });
+      })
       .catch(() => { clearTimeout(timer); cb({ online: false }); });
   }
 
@@ -75,9 +87,11 @@
     document.head.appendChild(s);
   }
 
-  function connectAndJoin(name) {
+  function connectAndJoin(name, skin) {
     leave();
     st.leaving = false;
+    st.name = name;
+    st.skin = skin;
     loadSocketLib(() => {
       if (st.leaving) return;
       const socket = io(serverUrl(), { reconnection: false });
@@ -85,10 +99,12 @@
       bindEvents(socket);
       socket.on('connect', () => {
         st.myId = socket.id;
-        socket.emit('playerJoin', { name: name, x: 0, y: 0, z: 0, rotation: 0 });
+        // st.skin: se nel frattempo e' stato scelto un altro personaggio, si entra gia' con quello
+        socket.emit('playerJoin', { name: name, skin: st.skin, x: 0, y: 0, z: 0, rotation: 0 });
       });
-      socket.on('connect_error', () => { if (!st.leaving) ui('error', 'connect_error'); });
-      socket.on('disconnect', () => { if (!st.leaving) ui('error', 'disconnected'); });
+      // Solo la connessione attuale puo' dare errore (non quella chiusa apposta per rientrare)
+      socket.on('connect_error', () => { if (!st.leaving && st.socket === socket) ui('error', 'connect_error'); });
+      socket.on('disconnect', () => { if (!st.leaving && st.socket === socket) ui('error', 'disconnected'); });
     }, () => ui('error', 'connect_error'));
   }
 
@@ -104,6 +120,7 @@
     st.players = {};
     st.items = {};
     st.lastSent = null;
+    st.pendingShots = 0;
     setWorldVisible(false);
   }
 
@@ -122,6 +139,10 @@
       st.players = players || {};
       st.joined = !!st.players[st.myId];
       if (st.joined) st.phase = 'lobby';
+      // Personaggio cambiato mentre ci si collegava: lo si comunica adesso.
+      // (Solo se il server salva la skin: con server che non la conoscono si ripeterebbe all'infinito.)
+      const mine = st.players[st.myId];
+      if (mine && typeof mine.skin === 'string' && st.skin && mine.skin !== st.skin) changeSkin(st.skin);
     });
     socket.on('currentItems', (items) => { st.items = items || {}; });
     socket.on('newPlayer', (p) => {
@@ -146,6 +167,7 @@
       st.items = data.items || {};
       st.phase = 'playing';
       st.lastSent = null;
+      st.pendingShots = 0;
       setWorldVisible(true);
       ui('started', me());
     });
@@ -155,8 +177,14 @@
       ensureRemote(p);
       st.remotes[p.id].target = { x: p.x, y: p.y, z: p.z, rot: p.rotation };
     });
-    socket.on('ammoUpdated', (d) => { if (me()) me().ammo = d.ammo; });
-    socket.on('outOfAmmo', () => ui('outOfAmmo'));
+    socket.on('ammoUpdated', (d) => {
+      if (me()) me().ammo = d.ammo;
+      if (d.shot !== false) st.pendingShots = Math.max(0, st.pendingShots - 1);   // risposta a un colpo
+    });
+    socket.on('outOfAmmo', () => {
+      st.pendingShots = Math.max(0, st.pendingShots - 1);
+      ui('outOfAmmo');
+    });
     socket.on('playerDamaged', (d) => {
       if (me()) { me().hp = d.newHp; me().shield = d.newShield; }
       ui('hurt');
@@ -165,6 +193,10 @@
     socket.on('shieldUpdated', (d) => { if (me()) me().shield = d.newShield; });
     socket.on('weaponChanged', (d) => {
       if (me()) { me().weapon = d.weapon; me().ammo = d.ammo; }
+    });
+    // Un altro giocatore ha raccolto un'arma: cambia quella che ha in mano
+    socket.on('playerWeapon', (d) => {
+      if (d && st.players[d.id]) st.players[d.id].weapon = d.weapon;
     });
     socket.on('itemSpawned', (item) => {
       st.items[item.id] = item;
@@ -209,6 +241,22 @@
     if (st.socket) st.socket.emit('startGame');
   }
 
+  // Personaggio scelto dalla lobby (SELEZIONA): il server lo salva e lo mostra a tutti.
+  // Il server vecchio (quello online senza "version", prima della 5) non conosce "changeSkin"
+  // e per tutti si restava col personaggio di base (il Militare). Con lui si esce e si rientra
+  // subito in lobby col nuovo personaggio: "playerJoin" porta la skin anche ai server vecchi.
+  function changeSkin(skin) {
+    const m = me();
+    if (m) m.skin = skin;
+    st.skin = skin;
+    if (!st.socket || !st.joined) return;
+    if (st.serverVersion !== null && st.serverVersion < 5 && st.phase === 'lobby') {
+      connectAndJoin(st.name, skin);
+      return;
+    }
+    st.socket.emit('changeSkin', skin);
+  }
+
   function sendMovementData(cur) {
     if (!st.socket) return;
     st.socket.emit('playerMovement', cur);
@@ -247,7 +295,19 @@
 
   // shot = { x, z } punto d'impatto (richiesto dal server) + dati extra per chi vuole disegnare il colpo
   function sendShoot(shot) {
-    if (st.socket) st.socket.emit('playerShoot', shot);
+    if (!st.socket) return;
+    st.socket.emit('playerShoot', shot);
+    st.pendingShots++;
+    st.lastShotAt = performance.now();
+  }
+
+  // Munizioni da mostrare e da usare per decidere se si puo' sparare: quelle del server
+  // meno i colpi ancora in viaggio (con le armi a raffica il server risponde in ritardo).
+  function ammo() {
+    const m = me();
+    if (!m) return 0;
+    if (st.pendingShots && performance.now() - st.lastShotAt > 1500) st.pendingShots = 0;   // risposta persa
+    return Math.max(0, m.ammo - st.pendingShots);
   }
 
   function collect(itemId) {
@@ -257,37 +317,38 @@
   // ---------------------------------------------------------------
   // Oggetti sulla mappa
   // ---------------------------------------------------------------
-  function buildItemModel(type) {
-    const g = new THREE.Group();
-    const part = (w, h, d, color, x, y, z) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: color }));
-      m.position.set(x, y, z);
-      g.add(m);
-    };
-    if (type === 'medkit') {
-      part(0.5, 0.35, 0.35, 0xe6dfca, 0, 0, 0);
-      part(0.34, 0.37, 0.1, 0x8d9a52, 0, 0, 0);      // croce verde
-      part(0.1, 0.37, 0.34, 0x8d9a52, 0, 0, 0);
-    } else if (type === 'ammo') {
-      part(0.5, 0.3, 0.32, 0xe2a823, 0, 0, 0);
-      part(0.52, 0.08, 0.34, 0x3a3836, 0, 0.1, 0);
-    } else if (type === 'shotgun') {
-      part(0.95, 0.12, 0.16, 0x8c4a2b, 0, 0, 0);
-      part(0.35, 0.16, 0.2, 0x3a3836, -0.3, -0.04, 0);
-    } else {   // armor
-      part(0.5, 0.55, 0.26, 0x5a8aa8, 0, 0, 0);
-      part(0.3, 0.2, 0.28, 0x3a3836, 0, 0.12, 0);
+  function itemName(type) {
+    if (ITEM_NAMES[type]) return ITEM_NAMES[type];
+    return CONFIG.WEAPONS[type] ? CONFIG.WEAPONS[type].name : type;
+  }
+
+  // Alone colorato a terra: dice da lontano che tipo di oggetto e'
+  const glowGeometry = new THREE.CircleGeometry(0.5, 20);
+  const glowMaterials = {};
+  function glowMaterial(color) {
+    if (!glowMaterials[color]) {
+      glowMaterials[color] = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.28, depthWrite: false });
     }
-    return g;
+    return glowMaterials[color];
   }
 
   function addItemMesh(item) {
     if (st.itemMeshes[item.id]) return;
-    const group = buildItemModel(item.type);
-    const baseY = (item.y || 0) + 0.55;
-    group.position.set(item.x, baseY, item.z);
+    const group = new THREE.Group();
+    group.position.set(item.x, item.y || 0, item.z);
+
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial(ITEM_GLOW[item.type] || WEAPON_GLOW));
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.03;
+    glow.userData.shared = true;
+    group.add(glow);
+
+    const spin = Models.item(item.type);     // modello low-poly (models.js): gira e galleggia
+    spin.position.y = 0.55;
+    group.add(spin);
+
     Render.addToScene(group);
-    st.itemMeshes[item.id] = { group: group, baseY: baseY };
+    st.itemMeshes[item.id] = { group: group, spin: spin };
   }
 
   function removeItemMesh(id) {
@@ -306,7 +367,7 @@
       if (Math.abs((it.y || 0) - pos.y) > 3) return;   // un altro piano: non lo si raggiunge
       const d = Math.hypot(it.x - pos.x, it.z - pos.z);
       if (d < PICKUP_RANGE && (!best || d < best.dist)) {
-        best = { id: id, type: it.type, name: ITEM_NAMES[it.type] || it.type, dist: d };
+        best = { id: id, type: it.type, name: itemName(it.type), dist: d };
       }
     });
     return best;
@@ -335,7 +396,10 @@
     part(0.28, 0.28, 0.28, skin, 0, 1.55, 0);         // testa
     part(0.22, 0.65, 0.26, dark, -0.15, 0.325, 0);    // gambe
     part(0.22, 0.65, 0.26, dark, 0.15, 0.325, 0);
-    part(0.1, 0.1, 0.5, dark, 0.3, 1.15, -0.3);       // arma, verso la direzione di sguardo
+    const socket = new THREE.Object3D();              // qui si aggancia l'arma (verso lo sguardo)
+    socket.name = 'weaponSocket';
+    socket.position.set(0.3, 1.1, -0.15);
+    g.add(socket);
     return g;
   }
 
@@ -362,12 +426,16 @@
 
   function ensureRemote(p) {
     if (st.remotes[p.id] || p.id === st.myId) return;
-    const group = buildPlayerModel(colorFor(p.id));
+    // Skin scelta dal giocatore; se manca o non si carica, il vecchio modello a scatole
+    const color = colorFor(p.id);
+    const group = window.Skins && Skins.list().length
+      ? Skins.createModel(p.skin, () => buildPlayerModel(color))
+      : buildPlayerModel(color);
     group.add(makeNamePlate(p.name || 'Giocatore'));
     group.position.set(p.x, p.y, p.z);
     group.rotation.y = p.rotation || 0;
     Render.addToScene(group);
-    st.remotes[p.id] = { group: group, target: { x: p.x, y: p.y, z: p.z, rot: p.rotation || 0 } };
+    st.remotes[p.id] = { group: group, target: { x: p.x, y: p.y, z: p.z, rot: p.rotation || 0 }, socket: null, weapon: null };
   }
 
   function removeRemote(id) {
@@ -381,6 +449,7 @@
   function disposeObject(obj) {
     if (!obj || !obj.traverse) return;
     obj.traverse((o) => {
+      if (o.userData && o.userData.shared) return;   // modelli condivisi (skin, armi, oggetti): restano in memoria
       if (o.geometry) o.geometry.dispose();
       if (o.material) {
         if (o.material.map) o.material.map.dispose();
@@ -414,26 +483,51 @@
   // Animazione a ogni frame: i giocatori remoti scivolano verso la posizione ricevuta
   function update(dt) {
     if (!st.worldVisible) return;
-    const k = Math.min(1, dt * 12);
+    const k = 1 - Math.exp(-dt * 12);      // inseguimento morbido, uguale a ogni frame rate
     Object.keys(st.remotes).forEach((id) => {
       const r = st.remotes[id];
       const g = r.group;
       const t = r.target;
+      const ox = g.position.x;
+      const oz = g.position.z;
       g.position.x += (t.x - g.position.x) * k;
       g.position.y += (t.y - g.position.y) * k;
       g.position.z += (t.z - g.position.z) * k;
+      animateLegs(r, Math.hypot(g.position.x - ox, g.position.z - oz) / Math.max(dt, 1e-4), dt);
       let diff = t.rot - g.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));   // strada piu' corta
       g.rotation.y += diff * k;
+
+      // Arma in mano: quella che il server dice che ha (il modello della skin puo' arrivare dopo)
+      if (!r.socket) {
+        r.socket = g.getObjectByName('weaponSocket');
+        if (r.socket) {                    // modello arrivato: ha le gambe mobili? (personaggi a codice)
+          const l = g.getObjectByName('legL');
+          const rr = g.getObjectByName('legR');
+          r.legs = l && rr ? [l, rr] : null;
+        }
+      }
+      const want = (st.players[id] && st.players[id].weapon) || 'pistol';
+      if (r.socket && r.weapon !== want && Models.equip(r.socket, want)) r.weapon = want;
     });
     st.time += dt;
     let i = 0;
     Object.keys(st.itemMeshes).forEach((id) => {
       const m = st.itemMeshes[id];
-      m.group.rotation.y += dt * 1.5;
-      m.group.position.y = m.baseY + Math.sin(st.time * 2 + i) * 0.06;
+      m.spin.rotation.y += dt * 1.5;
+      m.spin.position.y = 0.55 + Math.sin(st.time * 2 + i) * 0.06;
       i++;
     });
+  }
+
+  // Passo: le gambe dei personaggi fatti a codice oscillano in base alla velocita'
+  function animateLegs(r, speed, dt) {
+    if (!r.legs) return;
+    r.speed = (r.speed || 0) + (Math.min(speed, 12) - (r.speed || 0)) * Math.min(1, dt * 8);
+    r.step = (r.step || 0) + dt * r.speed * 2.3;
+    const swing = Math.sin(r.step) * Math.min(1, r.speed / 4) * 0.55;
+    r.legs[0].rotation.x = swing;
+    r.legs[1].rotation.x = -swing;
   }
 
   // ---------------------------------------------------------------
@@ -488,6 +582,7 @@
     checkStatus: checkStatus,
     connectAndJoin: connectAndJoin,
     startGame: startGame,
+    changeSkin: changeSkin,
     leave: leave,
     isJoined: () => st.joined,
     myId: () => st.myId,
@@ -497,6 +592,7 @@
     players: () => st.players,
     items: () => st.items,
     aliveCount: aliveCount,
+    ammo: ammo,
     tick: tick,
     update: update,
     forceSend: forceSend,

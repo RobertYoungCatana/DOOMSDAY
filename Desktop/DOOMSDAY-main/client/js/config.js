@@ -35,38 +35,15 @@ const CONFIG = {
   ARENA: {
     SIZE: 56,               // metri di lato (quadrata)
     WALL_HEIGHT: 10,        // altezza muri
-    FLOOR_COLOR: 0x4d463e,  // grigio cemento
-    WALL_COLOR: 0x2a2a2a,
-    ACCENT_COLOR: 0xff4500, // arancione DOOMSDAY
+    FLOOR_COLOR: 0x66645a,  // calcestruzzo urbano segnato dalla guerra
+    WALL_COLOR: 0x30322d,
+    ACCENT_COLOR: 0x65ef18, // colata tossica radioattiva
   },
 
   // --- Armi ---
-  WEAPONS: {
-    pistol: {
-      name: "Pistola",
-      damage: 25,
-      fireRate: 0.3,         // secondi tra un colpo e l'altro
-      magazine: 12,
-      reloadTime: 1.2,
-      color: 0xcccccc,
-    },
-    rifle: {
-      name: "Fucile Automatico",
-      damage: 18,
-      fireRate: 0.12,
-      magazine: 30,
-      reloadTime: 2.0,
-      color: 0x8B4513,
-    },
-    shotgun: {
-      name: "Fucile a Pompa",
-      damage: 80,
-      fireRate: 0.8,
-      magazine: 8,
-      reloadTime: 2.5,
-      color: 0x5a3a2a,
-    },
-  },
+  // Le armi (danni, velocita' di sparo, mira...) sono in js/shared/weapons.js:
+  // stesso file letto anche dal server, cosi' i numeri non possono andare fuori sincrono.
+  WEAPONS: (typeof window !== 'undefined' && window.WEAPONS) || {},
 
   // --- Bot ---
   BOT: {
@@ -81,8 +58,35 @@ const CONFIG = {
   // --- Rete ---
   NETWORK: {
     UPDATE_RATE: 20,        // Hz (aggiornamenti al secondo)
+    SERVER_VERSION: 5,      // versione del server che serve a questo client (vedi server.js)
     INTERPOLATION: 0.2,     // secondi di interpoltazione
   },
+
+  // --- Skin dei personaggi (scelta nel menu) ---
+  // Per aggiungerne una: un vestito in OUTFITS di js/characters.js + una riga qui con builder: 'nome'.
+  //   id: nome breve (minuscole, senza spazi) · name: nome mostrato nel menu
+  //   file: modello .gltf · rotationY: rotazione per farlo guardare in avanti
+  //   credit: autore del modello (licenza CC-BY: va citato)
+  //   builder: personaggio low-poly fatto a codice in js/characters.js (niente file)
+  //   (i modelli .gltf funzionano ancora, ma serve di nuovo lo script GLTFLoader in index.html)
+  // Il primo della lista e' quello di partenza.
+  SKINS: [
+    { id: 'military',  name: 'Militare',   builder: 'military' },
+    { id: 'nurse',     name: 'Infermiera', builder: 'nurse' },
+    { id: 'zombie',    name: 'Zombie',     builder: 'zombie' },
+    { id: 'ninja',     name: 'Ninja',      builder: 'ninja' },
+    { id: 'police',    name: 'Poliziotto', builder: 'police' },
+    { id: 'astronaut', name: 'Astronauta', builder: 'astronaut' },
+    { id: 'explorer',  name: 'Bobby',      builder: 'explorer' },
+    { id: 'jackson',   name: 'Jackson',    builder: 'jackson' },
+    { id: 'superman',  name: 'Superman',   builder: 'superman' },
+    { id: 'batman',    name: 'Batman',     builder: 'batman' },
+    { id: 'spiderman', name: 'Spider-Man', builder: 'spiderman' },
+    { id: 'pirate',    name: 'Pirata',     builder: 'pirate' },
+    { id: 'skeleton',  name: 'Scheletro',  builder: 'skeleton' },
+    { id: 'vampire',   name: 'Vampiro',    builder: 'vampire' },
+    { id: 'ghost',     name: 'Fantasma',   builder: 'ghost' },
+  ],
 
   // --- Colori HUD ---
   COLORS: {

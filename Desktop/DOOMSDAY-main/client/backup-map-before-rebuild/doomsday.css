@@ -1,0 +1,855 @@
+/* =====================================================================
+   DOOMSDAY - style.css
+   Idea: un terminale da campo militare sopra un'arena in rovina.
+   Il menu non e' una scheda: sta a sinistra, sul fondo scuro, mentre la mappa
+   gira piano dietro. L'unico elemento "teatrale" e' il titolo a stencil.
+   Tutto il resto e' sobrio e leggibile: nel gioco conta vedere salute, colpi, tempo.
+
+   Colori con un ruolo preciso:
+     ruggine = azione e marchio · oliva = salute · ambra = munizioni e avvisi · rosso = pericolo
+   Font: solo font di sistema (la rete della scuola puo' bloccare i font online).
+   ===================================================================== */
+
+:root {
+  --ash: #26241f;          /* piastre e pannelli: cemento sporco */
+  --ash-deep: #181714;     /* fondo del menu */
+  --slate: #3d3b33;        /* linee e bordi */
+  --bone: #e6dfca;         /* testo principale */
+  --bone-dim: #a39d88;     /* testo secondario */
+  --rust: #cf5a1c;         /* azione e marchio */
+  --rust-hot: #ee7a2f;     /* azione in hover */
+  --olive: #8d9a52;        /* salute */
+  --amber: #e2a823;        /* munizioni, avvisi, nastro di pericolo */
+  --blood: #c4352a;        /* pericolo */
+
+  --font-display: "Bahnschrift Condensed", "Bahnschrift", "Arial Narrow", "Haettenschweiler", Impact, sans-serif;
+  --font-ui: "Bahnschrift", "Segoe UI", system-ui, sans-serif;
+
+  /* nastro giallo-nero come sulle recinzioni di cantiere */
+  --hazard: repeating-linear-gradient(-45deg, var(--amber) 0 14px, var(--ash-deep) 14px 28px);
+}
+
+/* ---------- Base ---------- */
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--bone);
+  font-family: var(--font-ui);
+}
+
+#app { position: absolute; inset: 0; }
+canvas { display: block; }
+button, input { font: inherit; }
+
+/* Elementi opzionali, se esistono gia' in index.html */
+#flash-transition {
+  position: fixed; inset: 0; z-index: 2100;
+  background: #000; opacity: 0; pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+#overlay-effect {
+  position: fixed; inset: 0; z-index: 15; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 62%, rgba(10, 8, 5, 0.45) 100%);
+}
+
+/* =====================================================================
+   MENU PRINCIPALE
+   (menu.js lo mostra con display:flex e lo nasconde con display:none)
+   ===================================================================== */
+#menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  padding: 0 clamp(20px, 7vw, 110px);
+  user-select: none;
+  /* a sinistra scuro (leggibilita'), a destra la mappa si vede */
+  background:
+    linear-gradient(90deg, rgba(24, 23, 20, 0.95) 0%, rgba(24, 23, 20, 0.84) 34%, rgba(24, 23, 20, 0.2) 68%, rgba(24, 23, 20, 0) 100%),
+    radial-gradient(ellipse at 72% 50%, transparent 40%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+#main-menu {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Nastro di pericolo sopra il titolo */
+#main-menu::before {
+  content: "";
+  display: block;
+  height: 12px;
+  background: var(--hazard);
+}
+
+/* Titolo: stencil spruzzato su cassa militare, leggermente storto.
+   La fessura orizzontale imita i "ponti" dei caratteri stencil. */
+#main-menu h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(52px, 9.5vw, 120px);
+  line-height: 0.86;
+  letter-spacing: 0.01em;
+  /* Il riquadro deve essere largo quanto la scritta: lo sfondo che riempie le lettere
+     esiste solo dentro il riquadro, e fuori le lettere diventerebbero trasparenti. */
+  width: max-content;
+  max-width: 100vw;
+  align-self: flex-start;
+  padding-right: 0.1em;
+  color: transparent;
+  background:
+    linear-gradient(180deg, transparent 0 41%, var(--ash-deep) 41% 47%, transparent 47% 100%),
+    linear-gradient(180deg, var(--bone) 0%, #c9bfa2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  transform: skewX(-4deg) rotate(-1.2deg);
+  transform-origin: left bottom;
+  animation: slam 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;   /* l'unico movimento "d'ingresso" */
+}
+
+.tagline {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--bone-dim);
+}
+
+/* Nickname */
+#nickname-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#nickname-container label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bone);
+}
+#nickname-container label small {
+  font-weight: 400;
+  color: var(--bone-dim);
+}
+
+.nickname-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(38, 36, 31, 0.9);
+  color: var(--bone);
+  border: 0;
+  border-left: 5px solid var(--rust);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  outline: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.nickname-input::placeholder { color: #75705f; font-weight: 400; }
+.nickname-input:focus {
+  background: rgba(54, 51, 43, 0.95);
+  border-left-color: var(--rust-hot);
+  box-shadow: 0 0 0 2px var(--amber);
+}
+
+/* Pulsanti: angoli tagliati, come lamiera. Il primario e' il piu' grande della pagina. */
+.play-btn,
+.controls-btn,
+.pause-btn {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: transform 0.12s ease, background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.play-btn {
+  width: 100%;
+  padding: 18px 24px;
+  font-size: 36px;
+  line-height: 1;
+  background: var(--rust);
+  color: #1b110a;
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+}
+.play-btn:hover { background: var(--rust-hot); transform: translateX(8px); }
+.play-btn:active { transform: translateX(3px); }
+
+.controls-btn,
+.pause-btn {
+  padding: 12px 18px;
+  font-size: 22px;
+  background: transparent;
+  color: var(--bone);
+  border-left: 4px solid var(--slate);
+}
+.controls-btn:hover,
+.pause-btn:hover {
+  color: var(--rust-hot);
+  border-left-color: var(--rust);
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateX(6px);
+}
+.pause-btn.quit-btn:hover { color: var(--blood); border-left-color: var(--blood); }
+
+/* Focus da tastiera ben visibile (dentro, perche' clip-path taglierebbe un contorno esterno) */
+.play-btn:focus-visible,
+.controls-btn:focus-visible,
+.pause-btn:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 3px var(--amber);
+}
+
+/* Controlli */
+.controls-help {
+  display: block;
+  padding-top: 14px;
+  border-top: 1px solid var(--slate);
+}
+.controls-help h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bone-dim);
+}
+.controls-help ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 18px;
+}
+.controls-help li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+.key {
+  flex: none;
+  min-width: 64px;
+  box-sizing: border-box;
+  padding: 3px 8px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--amber);
+  background: var(--ash);
+  border: 1px solid var(--slate);
+  border-bottom-width: 3px;
+  border-radius: 2px;
+}
+
+/* =====================================================================
+   HUD (visibile solo durante la partita)
+   ===================================================================== */
+#hud {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;   /* i numeri non "ballano" quando cambiano */
+  color: var(--bone);
+}
+#hud > * { position: absolute; z-index: 1; }
+
+/* Vignetta leggera sempre presente + vignetta rossa quando la salute e' bassa */
+#hud::before,
+#hud::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+#hud::after {
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(10, 8, 5, 0.5) 100%);
+}
+#hud::before {
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(160, 20, 10, 0.6) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+#hud.low-health::before { opacity: 1; animation: heartbeat 1.1s ease-in-out infinite; }
+
+/* Mirino con vuoto al centro e punto */
+.crosshair {
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: var(--rust-hot);
+}
+.crosshair::before,
+.crosshair::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+.crosshair::before {
+  width: 34px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--bone) 0 11px, transparent 11px 23px, var(--bone) 23px 34px);
+}
+.crosshair::after {
+  width: 2px;
+  height: 34px;
+  background: linear-gradient(180deg, var(--bone) 0 11px, transparent 11px 23px, var(--bone) 23px 34px);
+}
+
+/* Etichette piccole comuni */
+.health .lbl,
+.ammo .lbl,
+.timer .lbl,
+.timer .unit {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bone-dim);
+}
+
+/* Salute (in basso a sinistra) con barra inclinata */
+.health {
+  --bar: var(--olive);
+  left: 28px;
+  bottom: 26px;
+  min-width: 250px;
+  padding: 10px 22px 22px 18px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  background: linear-gradient(90deg, rgba(24, 23, 20, 0.82), rgba(24, 23, 20, 0));
+  border-left: 5px solid var(--bar);
+}
+.health::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 22px;
+  bottom: 8px;
+  height: 6px;
+  background: linear-gradient(90deg, var(--bar) var(--hp, 100%), rgba(255, 255, 255, 0.12) var(--hp, 100%));
+  transform: skewX(-25deg);
+  transition: background 0.15s ease;
+}
+#health-value { font-size: 60px; font-weight: 700; line-height: 0.9; }
+#hud.low-health .health { --bar: var(--blood); }
+#hud.low-health #health-value { color: var(--blood); animation: heartbeat 1.1s ease-in-out infinite; }
+
+/* Munizioni (in basso a destra) */
+.ammo {
+  right: 28px;
+  bottom: 26px;
+  padding: 10px 18px 12px 22px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  background: linear-gradient(270deg, rgba(24, 23, 20, 0.82), rgba(24, 23, 20, 0));
+  border-right: 5px solid var(--amber);
+}
+#ammo-value { font-size: 60px; font-weight: 700; line-height: 0.9; }
+.ammo.low { border-right-color: var(--blood); }
+.ammo.low #ammo-value { color: var(--blood); animation: blink 0.7s steps(2, jump-none) infinite; }
+
+/* Tempo (in alto al centro) */
+.timer {
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  padding: 6px 34px 9px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: rgba(24, 23, 20, 0.8);
+  border-bottom: 3px solid var(--rust);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 16px 100%);
+}
+#timer-value { font-size: 46px; font-weight: 700; line-height: 1; min-width: 2ch; text-align: right; }
+.timer.urgent { border-bottom-color: var(--blood); }
+.timer.urgent #timer-value { color: var(--blood); animation: blink 1s steps(2, jump-none) infinite; }
+
+/* =====================================================================
+   PAUSA E FINE PARTITA
+   (menu.js li mostra con display:block e li nasconde con display:none)
+   ===================================================================== */
+#pause-menu,
+#end-menu {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 110;
+  box-sizing: border-box;
+  width: min(400px, calc(100vw - 32px));
+  padding: 0 0 26px;
+  background: var(--ash);
+  user-select: none;
+  box-shadow: 0 0 0 100vmax rgba(10, 8, 5, 0.62);   /* oscura tutto il resto */
+  animation: open 0.16s ease-out;                   /* risponde al tasto Esc: mostra cosa e' cambiato */
+}
+#end-menu { width: min(460px, calc(100vw - 32px)); }
+
+#pause-menu::before,
+#end-menu::before {
+  content: "";
+  display: block;
+  height: 12px;
+  margin-bottom: 18px;
+  background: var(--hazard);
+}
+
+#pause-menu h2,
+#end-menu h2 {
+  margin: 0 28px 14px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 46px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+#end-menu h2 { color: var(--rust-hot); }
+
+#pause-menu .pause-btn,
+#end-menu .pause-btn {
+  display: block;
+  width: calc(100% - 56px);
+  margin: 10px 28px 0;
+}
+
+/* Riepilogo di fine partita */
+#end-menu .stats {
+  margin: 0 28px 14px;
+  border-top: 1px solid var(--slate);
+}
+#end-menu .stats div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--slate);
+}
+#end-menu .k { font-size: 16px; color: var(--bone-dim); }
+#end-menu .v {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+#end-kills { color: var(--olive); }
+#end-deaths { color: var(--blood); }
+
+/* =====================================================================
+   ANIMAZIONI
+   ===================================================================== */
+@keyframes slam {
+  from { opacity: 0; transform: skewX(-4deg) rotate(-1.2deg) scale(1.35); }
+  60%  { opacity: 1; }
+  to   { opacity: 1; transform: skewX(-4deg) rotate(-1.2deg) scale(1); }
+}
+@keyframes open {
+  from { opacity: 0; transform: translate(-50%, -47%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+@keyframes heartbeat {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+@keyframes blink {
+  to { opacity: 0.35; }
+}
+
+/* =====================================================================
+   SCHERMI PICCOLI E PREFERENZE DI MOVIMENTO
+   ===================================================================== */
+@media (max-width: 760px) {
+  #menu-overlay { background: rgba(24, 23, 20, 0.9); justify-content: center; }
+  .controls-help ul { grid-template-columns: 1fr; }
+  .health { left: 12px; bottom: 12px; min-width: 190px; }
+  .ammo { right: 12px; bottom: 12px; }
+  #health-value, #ammo-value { font-size: 44px; }
+}
+
+@media (max-height: 640px) {
+  #main-menu { gap: 12px; }
+  #main-menu h1 { font-size: clamp(48px, 9vw, 84px); }
+  .tagline { display: none; }
+  .play-btn { padding: 14px 22px; font-size: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+
+/* =====================================================================
+   MULTIPLAYER: stato del server, lobby, scudo, kill feed, classifica
+   ===================================================================== */
+:root { --steel: #5a8aa8; }
+
+/* Stato del server e errori nel menu */
+.server-status {
+  margin: 0;
+  font-size: 15px;
+  color: var(--bone-dim);
+}
+.server-status::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 8px;
+  background: var(--bone-dim);
+  transform: rotate(45deg);
+}
+.server-status.online::before { background: var(--olive); }
+.server-status.offline::before { background: var(--blood); }
+.server-status.offline { color: var(--bone); }
+
+.menu-error {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--blood);
+}
+.menu-error:empty { display: none; }
+
+.play-btn:disabled {
+  background: var(--slate);
+  color: var(--bone-dim);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Lobby: stessa impostazione del menu, a sinistra sulla mappa che gira */
+#lobby-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  padding: 0 clamp(20px, 7vw, 110px);
+  user-select: none;
+  background:
+    linear-gradient(90deg, rgba(24, 23, 20, 0.95) 0%, rgba(24, 23, 20, 0.84) 34%, rgba(24, 23, 20, 0.2) 68%, rgba(24, 23, 20, 0) 100%),
+    radial-gradient(ellipse at 72% 50%, transparent 40%, rgba(0, 0, 0, 0.5) 100%);
+}
+#lobby {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+#lobby::before {
+  content: "";
+  display: block;
+  height: 12px;
+  background: var(--hazard);
+}
+#lobby h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(48px, 8vw, 84px);
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+.lobby-count { margin: 0; font-size: 18px; font-weight: 600; color: var(--rust-hot); }
+.lobby-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+.lobby-names li {
+  padding: 8px 12px;
+  background: rgba(38, 36, 31, 0.9);
+  border-left: 4px solid var(--olive);
+  font-size: 18px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lobby-hint { margin: 0; font-size: 15px; color: var(--bone-dim); }
+
+/* Scudo (sopra la salute) */
+.shield {
+  --bar: var(--steel);
+  display: none;
+  left: 28px;
+  bottom: 132px;
+  min-width: 250px;
+  padding: 6px 22px 16px 18px;
+  align-items: baseline;
+  gap: 14px;
+  background: linear-gradient(90deg, rgba(24, 23, 20, 0.82), rgba(24, 23, 20, 0));
+  border-left: 5px solid var(--bar);
+}
+.shield.on { display: flex; }
+.shield .lbl { font-family: var(--font-ui); font-size: 15px; font-weight: 600; color: var(--bone-dim); }
+#shield-value { font-size: 38px; font-weight: 700; line-height: 0.9; }
+.shield::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 22px;
+  bottom: 6px;
+  height: 5px;
+  background: linear-gradient(90deg, var(--bar) var(--sh, 0%), rgba(255, 255, 255, 0.12) var(--sh, 0%));
+  transform: skewX(-25deg);
+}
+
+/* Munizioni: l'etichetta e' il nome dell'arma */
+#ammo-value { min-width: 2ch; text-align: right; }
+
+/* Messaggi "X ha eliminato Y" */
+.killfeed {
+  top: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.kf {
+  padding: 6px 14px;
+  background: rgba(24, 23, 20, 0.82);
+  border-right: 4px solid var(--rust);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+/* "Premi E" e banner di eliminazione */
+.prompt {
+  left: 50%;
+  bottom: 24%;
+  transform: translateX(-50%);
+  padding: 8px 22px;
+  background: rgba(24, 23, 20, 0.85);
+  border-bottom: 3px solid var(--amber);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--amber);
+  white-space: nowrap;
+}
+.prompt:empty { display: none; }
+
+.banner {
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  font-size: clamp(34px, 5vw, 56px);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--blood);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+}
+.banner:empty { display: none; }
+
+/* Colpo a segno e danno subito */
+#hud.hit .crosshair { background: var(--blood); box-shadow: 0 0 8px var(--blood); }
+#hud.hurt::before { opacity: 1; }
+
+/* Pausa e fine partita */
+.pause-note, #end-menu .end-note {
+  margin: 0 28px 14px;
+  font-size: 15px;
+  color: var(--bone-dim);
+}
+#end-menu .winner {
+  margin: 0 28px 14px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--amber);
+}
+.scoreboard {
+  list-style: none;
+  margin: 0 28px 14px;
+  padding: 0;
+  border-top: 1px solid var(--slate);
+}
+.scoreboard li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--slate);
+  font-size: 20px;
+  font-weight: 600;
+}
+.scoreboard li:first-child { color: var(--amber); }
+.scoreboard li.me { border-left: 4px solid var(--rust); padding-left: 10px; }
+.scoreboard li span:last-child {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  #lobby-overlay { background: rgba(24, 23, 20, 0.9); justify-content: center; }
+  .lobby-names { grid-template-columns: 1fr; }
+  .shield { left: 12px; bottom: 100px; min-width: 190px; }
+}
+
+
+
+.dmg-number {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  font: bold 26px Arial, sans-serif;
+  color: #ffcc00;
+  text-shadow: 0 0 4px #000, 0 2px 0 #000;
+  pointer-events: none;
+  z-index: 1000;
+  animation: dmg-rise 0.9s ease-out forwards;
+}
+.dmg-number.kill {
+  color: #ff4500;
+  font-size: 36px;
+}
+@keyframes dmg-rise {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  100% { opacity: 0; transform: translate(-50%, calc(-50% - 60px)) scale(1); }
+}
+
+
+
+.gear-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid #555;
+  background: rgba(0,0,0,0.4);
+  color: #e6dfca;
+  font-size: 20px;
+  cursor: pointer;
+}
+.gear-btn:hover { background: rgba(255,69,0,0.25); }
+
+#settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.7);
+}
+#settings {
+  background: #1a1a1a;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 24px 28px;
+  max-width: 420px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #e6dfca;
+}
+#settings h2 { margin-top: 0; color: #ff4500; }
+#settings h3 { margin: 18px 0 8px; font-size: 15px; color: #ffcc00; }
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+.settings-row label { flex: 1; font-size: 14px; }
+.settings-row input[type="range"] { flex: 2; }
+.sens-value { width: 50px; text-align: right; font-size: 12px; color: #999; }
+.pad-status { font-size: 13px; color: #8d9a52; margin: 10px 0; }
+.settings-controls { list-style: none; padding: 0; margin: 0; }
+.settings-controls li {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  padding: 4px 0;
+}
+.settings-controls .key {
+  background: #333;
+  border-radius: 4px;
+  padding: 2px 8px;
+  min-width: 80px;
+  text-align: center;
+}
+/* DOOMSDAY identity refresh */
+:root {
+  --ash:#171c18; --ash-deep:#090d0b; --slate:#39443a; --bone:#d7ddcf; --bone-dim:#929d8d;
+  --rust:#a8e600; --rust-hot:#c4ff19; --olive:#82a84c; --amber:#b9d96a; --blood:#e14e3e;
+  --font-display:"Bahnschrift Condensed","Arial Narrow",Impact,sans-serif;
+  --font-ui:"Bahnschrift","Segoe UI",system-ui,sans-serif;
+  --hazard:repeating-linear-gradient(-45deg,#51613b 0 14px,#171c18 14px 28px);
+}
+#menu-overlay { background:linear-gradient(90deg,rgba(8,12,10,.97),rgba(11,16,12,.83) 40%,rgba(10,16,12,.15) 100%),radial-gradient(ellipse at 75% 50%,transparent 25%,rgba(0,0,0,.58)); }
+:root { --ash:#121612; --ash-deep:#070a08; --slate:#30382f; }
+#pause-menu,#end-menu,#settings-overlay,#lobby-overlay { background-color:rgba(15,19,15,.97); }
+#main-menu { gap:15px; }
+#main-menu::before { background:linear-gradient(90deg,#a8e600,rgba(168,230,0,.08)); }
+.brand-logo { display:block;width:min(100%,500px);height:auto;max-height:150px;object-fit:contain;object-position:left center;filter:drop-shadow(0 0 18px rgba(140,255,0,.16)); }
+.play-btn { background:#a8e600;color:#10150b;box-shadow:0 8px 30px rgba(116,181,0,.18); }
+.play-btn:hover { background:#c4ff19;box-shadow:0 0 28px rgba(168,230,0,.3); }
+.nickname-input { border-left-color:#a8e600; }
+.nickname-input:focus { border-left-color:#c4ff19;box-shadow:0 0 0 2px #82a84c; }
+.crosshair { background:#a8e600;filter:drop-shadow(0 0 5px #a8e600); }
+.crosshair::before,.crosshair::after { background:linear-gradient(90deg,#d7ddcf 0 11px,transparent 11px 23px,#d7ddcf 23px 34px); }
+#loading-screen { position:fixed;inset:0;z-index:300;display:grid;place-content:center;justify-items:center;gap:22px;background:radial-gradient(ellipse at 50% 58%,rgba(55,75,47,.3),transparent 48%),linear-gradient(180deg,rgba(6,10,8,.97),rgba(15,22,16,.96));overflow:hidden; }
+#loading-screen::before { content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(160,220,120,.035) 6px 7px);animation:scan 4s linear infinite; }
+#loading-screen::after { content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 20% 32%,rgba(175,255,120,.24) 0 1px,transparent 2px),radial-gradient(circle at 78% 66%,rgba(175,255,120,.2) 0 1px,transparent 2px); }
+.loading-logo { width:min(78vw,720px);height:auto;animation:logoPulse 3s ease-in-out infinite;filter:drop-shadow(0 0 18px rgba(115,255,0,.25)); }
+#loading-screen p { margin:4px 0;color:#a8b29f;font-size:13px;letter-spacing:.22em;text-transform:uppercase; }
+.loading-status { color:#9ee600;font:600 11px var(--font-ui);letter-spacing:.24em;animation:statusPulse 1.4s ease-in-out infinite; }
+#hud { text-shadow:0 2px 8px #000; }
+@keyframes scan { from{transform:translateY(-10px)} to{transform:translateY(10px)} }
+@keyframes logoPulse { 0%,100%{transform:scale(.985);filter:drop-shadow(0 0 12px rgba(115,255,0,.18))} 50%{transform:scale(1.015);filter:drop-shadow(0 0 28px rgba(115,255,0,.5))} }
+@keyframes statusPulse { 50%{opacity:.48} }
+@media(max-width:760px){.brand-logo{object-position:center}#main-menu{margin:auto}#loading-screen p{font-size:10px;letter-spacing:.12em}}
+
+/* Interstitial: logo only, black void, military green signal breakup. */
+#loading-screen { background:#000 !important;place-content:center;gap:18px; }
+#loading-screen::before { inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(88,112,55,.12) 4px,transparent 5px 8px);animation:loading-scan 2.8s linear infinite; }
+#loading-screen::after { inset:0;background:linear-gradient(90deg,transparent 0 12%,rgba(87,111,54,.08) 12.1% 12.4%,transparent 12.5% 82%,rgba(87,111,54,.06) 82.1% 82.5%,transparent 82.6%); }
+.loading-mark { position:relative;width:min(78vw,760px); }
+.loading-logo { display:block;position:relative;width:100%;height:auto;animation:logo-flicker 3.8s steps(1,end) infinite;filter:drop-shadow(0 0 7px rgba(92,125,49,.22)); }
+.loading-mark::before,.loading-mark::after { content:"";position:absolute;inset:0;background:url("assets/doomsday-logo.png") center/contain no-repeat;pointer-events:none;opacity:0; }
+.loading-mark::before { filter:sepia(1) saturate(2) hue-rotate(35deg);mix-blend-mode:screen;animation:glitch-a 4.2s steps(1,end) infinite; }
+.loading-mark::after { filter:sepia(1) saturate(1.5) hue-rotate(50deg);mix-blend-mode:screen;animation:glitch-b 5.1s steps(1,end) infinite; }
+#loading-screen p { margin:0;color:#78836b;font-size:11px;letter-spacing:.2em;text-transform:none; }
+@keyframes loading-scan { from{transform:translateY(-10px)}to{transform:translateY(10px)} }
+@keyframes logo-flicker { 0%,88%,91%,96%,100%{opacity:1}89%{opacity:.72}90%{opacity:.94}94%{opacity:.58}95%{opacity:1} }
+@keyframes glitch-a { 0%,86%,89%,100%{opacity:0;clip-path:inset(0 0 100% 0);transform:translate(0)}87%{opacity:.62;clip-path:inset(30% 0 48% 0);transform:translate(-7px,1px)}88%{opacity:.34;clip-path:inset(65% 0 22% 0);transform:translate(6px,-1px)} }
+@keyframes glitch-b { 0%,73%,76%,100%{opacity:0;clip-path:inset(100% 0 0 0);transform:translate(0)}74%{opacity:.5;clip-path:inset(54% 0 34% 0);transform:translate(8px,0)}75%{opacity:.3;clip-path:inset(18% 0 69% 0);transform:translate(-5px,1px)} }
+
+/* First launch interstitial */
+#boot-screen { position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;background:#030504;transition:opacity .28s ease,visibility .28s ease; }
+#boot-screen.boot-screen-done { opacity:0;visibility:hidden;pointer-events:none; }
+.boot-mark { width:min(70vw,680px); }
+.boot-mark .loading-logo { animation:logo-flicker 2.6s steps(1,end) infinite;filter:drop-shadow(0 0 10px rgba(118,177,53,.32)); }
+.boot-progress { width:min(54vw,460px);height:5px;background:#20251d;border:1px solid #30392a;overflow:hidden; }
+.boot-progress span { display:block;width:0;height:100%;background:#8cce3a;box-shadow:0 0 12px rgba(140,206,58,.62);animation:boot-load 3s linear forwards; }
+@keyframes boot-load { to { width:100%; } }
