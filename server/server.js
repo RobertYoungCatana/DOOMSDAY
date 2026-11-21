@@ -52,7 +52,7 @@ const io = new Server(server, {
 
 // ================= CONFIGURAZIONE =================
 const MIN_PLAYERS = 2;               // giocatori minimi per far partire la partita
-const MAX_PLAYERS = 8;               // giocatori massimi nella stanza
+const MAX_PLAYERS = 12;               // giocatori massimi nella stanza
 const MAP_LIMIT = 50;                // le posizioni oltre +/- questo valore vengono bloccate
 const FIRST_DEATH_ENDS_MATCH = false; // true = la partita finisce alla PRIMA morte
                                       // false = finisce quando resta un solo sopravvissuto
