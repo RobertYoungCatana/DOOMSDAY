@@ -1,0 +1,14 @@
+﻿{
+  "name": "doomsday-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build di produzione del client DOOMSDAY: un solo file JS minificato e offuscato, CSS minificato, niente source map",
+  "scripts": {
+    "build": "node build.js",
+    "build:debug": "node build.js --no-obfuscate --no-guard"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "javascript-obfuscator": "5.10.1"
+  }
+}

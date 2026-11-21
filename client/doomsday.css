@@ -1145,3 +1145,157 @@ input[type="range"]:focus-visible { box-shadow: none !important; outline: 2px so
   border-left: 3px solid #e2a823;
 }
 .skin-warning:empty { display: none; }
+
+/* =====================================================================
+   MENU PRINCIPALE: versione (in basso) e crediti (in basso a destra)
+   ===================================================================== */
+.menu-version,
+.menu-credits {
+  position: absolute;
+  bottom: 12px;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--bone-dim);
+  opacity: 0.85;
+  pointer-events: none;
+  user-select: none;
+}
+.menu-version { left: clamp(20px, 7vw, 110px); text-transform: uppercase; }
+.menu-credits { right: 18px; }
+@media (max-width: 760px) {
+  .menu-version, .menu-credits { position: static; width: 100%; text-align: center; margin-top: 6px; }
+}
+
+/* =====================================================================
+   TASTI A SCHERMO: tastiera (riquadro) o controller (simbolo colorato).
+   Li crea menu.js (fillKeyCap) in base all'ultimo dispositivo usato.
+   ===================================================================== */
+.kc {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0.08em 0.45em;
+  box-sizing: border-box;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 0.85em;
+  line-height: 1.35;
+  color: var(--bone);
+  background: var(--ash);
+  border: 1px solid var(--slate);
+  border-bottom-width: 3px;
+  border-radius: 3px;
+  vertical-align: 0.08em;
+  text-shadow: none;
+}
+.kc-pad { border-radius: 999px; border-bottom-width: 1px; background: #1d221d; }
+.kc-pad.pad-a, .kc-pad.pad-b, .kc-pad.pad-y { min-width: 1.7em; padding: 0.08em 0.3em; }
+.kc-pad.pad-xbox.pad-a { color: #6fd34a; border-color: #6fd34a; }
+.kc-pad.pad-xbox.pad-b { color: #ff5a4f; border-color: #ff5a4f; }
+.kc-pad.pad-xbox.pad-y { color: #f5c638; border-color: #f5c638; }
+.kc-pad.pad-ps.pad-a { color: #7fa8ff; border-color: #7fa8ff; }
+.kc-pad.pad-ps.pad-b { color: #ff6b6b; border-color: #ff6b6b; }
+.kc-pad.pad-ps.pad-y { color: #4fd8b0; border-color: #4fd8b0; }
+.kc-pad.pad-trigger, .kc-pad.pad-bumper { border-radius: 6px 6px 3px 3px; }
+.kc-pad.pad-stick { border-style: double; border-width: 3px; padding: 0 0.45em; }
+.prompt .kc { margin-right: 4px; font-size: 0.9em; }
+.pause-note .kc { font-size: 13px; }
+
+/* =====================================================================
+   NUMERI DEI DANNI: blu quando il bersaglio ha ancora scudo (stile Fortnite)
+   ===================================================================== */
+.dmg-number.headshot { font-size: 30px; }
+.dmg-number.dmg-shield:not(.kill) {
+  color: #4fb6ff;
+  text-shadow: 0 0 6px rgba(20, 110, 255, 0.85), 0 2px 0 #00122e;
+}
+.dmg-number.dmg-shield.headshot:not(.kill) { color: #9ad8ff; }
+.dmg-number.dmg-shield-break:not(.kill)::after {
+  content: " ◈";
+  font-size: 0.7em;
+  color: #bfe6ff;
+}
+
+/* Colpito sullo scudo: vignetta blu invece che rossa */
+#hud.hurt-shield::before {
+  opacity: 1;
+  animation: none;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(30, 120, 255, 0.55) 100%);
+}
+
+/* =====================================================================
+   MODALITA' SPETTATORE (da eliminati): chi stai guardando + come cambiare
+   ===================================================================== */
+.spectate {
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 26px 12px;
+  background: rgba(15, 19, 15, 0.82);
+  border-bottom: 3px solid var(--rust);
+  white-space: nowrap;
+}
+.spectate[hidden] { display: none; }
+.spec-label { font-family: var(--font-ui); font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--bone-dim); }
+.spec-name { font-size: 34px; font-weight: 700; color: var(--rust-hot); line-height: 1; }
+.spec-hint { font-family: var(--font-ui); font-size: 14px; color: var(--bone); }
+#hud.spectating .crosshair,
+#hud.spectating .health,
+#hud.spectating .shield,
+#hud.spectating .ammo,
+#hud.spectating .prompt { display: none !important; }
+
+/* Fine partita: conto alla rovescia per tornare alla lobby */
+#end-menu .end-note .countdown {
+  display: inline-block;
+  min-width: 1.2em;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--rust-hot);
+  vertical-align: -0.12em;
+}
+
+/* =====================================================================
+   IMPOSTAZIONI: comandi rimappabili e modalita' accovacciamento
+   ===================================================================== */
+.keybinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  margin: 6px 0 10px;
+}
+@media (max-width: 520px) { .keybinds { grid-template-columns: 1fr; } }
+.keybind,
+.toggle-btn {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  border: 0;
+  border-left: 3px solid var(--slate);
+  cursor: pointer;
+  font: 600 13px var(--font-ui);
+  color: var(--bone);
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.keybind .key { min-width: 64px; }
+.keybind:hover,
+.toggle-btn:hover { background: rgba(168, 230, 0, 0.08); border-left-color: var(--rust); }
+.keybind.capturing { border-left-color: var(--amber); background: rgba(226, 168, 35, 0.12); }
+.keybind.capturing .key { color: var(--bone); animation: blink 1s steps(2, jump-none) infinite; }
+.keybind.flash { animation: skin-confirm 0.6s ease-out; }
+.toggle-btn { flex: 1.4; justify-content: center; color: var(--rust-hot); }
+.keys-reset-btn { margin-top: 10px; font-size: 16px; padding: 8px 14px; }
+.keybind.nav-focus,
+.toggle-btn.nav-focus { border-left-color: var(--rust); }

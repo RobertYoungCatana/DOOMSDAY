@@ -1,7 +1,7 @@
 // DOOMSDAY - collision.js
 // Collisioni giocatore vs scatole di MAP.boxes (AABB), un asse alla volta.
 // Formato scatola: { x, z (CENTRO), y (BASE), w, h, d, solid }  (solid:false = decorazione)
-// Il giocatore e' una scatola: raggio 0.3, altezza 1.8. player.position = piedi.
+// Il giocatore e' una scatola: raggio 0.3, altezza 1.8 (1.35 da accovacciato: player.height). player.position = piedi.
 // Funziona sia nel browser sia in Node: move(player, dt, map) accetta la mappa come parametro.
 
 (function () {
@@ -10,13 +10,13 @@
   const STEP = 0.5;     // gradino massimo che si sale camminando
   const EPS = 0.001;
 
-  // true se il giocatore (nella posizione p) si sovrappone alla scatola b
-  function overlaps(p, b) {
+  // true se il giocatore (nella posizione p, alto h: di base H) si sovrappone alla scatola b
+  function overlaps(p, b, h) {
     const y0 = b.y || 0;
     return (
       p.x + R > b.x - b.w / 2 && p.x - R < b.x + b.w / 2 &&
       p.z + R > b.z - b.d / 2 && p.z - R < b.z + b.d / 2 &&
-      p.y + H > y0 && p.y < y0 + b.h
+      p.y + (h || H) > y0 && p.y < y0 + b.h
     );
   }
 
@@ -24,10 +24,11 @@
   function moveHorizontal(player, boxes, axis, amount) {
     const p = player.position;
     const size = axis === 'x' ? 'w' : 'd';
+    const h = player.height || H;     // accovacciati si passa sotto gli ostacoli piu' bassi
     p[axis] += amount;
 
     for (const b of boxes) {
-      if (b.solid === false || !overlaps(p, b)) continue;
+      if (b.solid === false || !overlaps(p, b, h)) continue;
 
       const top = (b.y || 0) + b.h;
       if (player.onGround && top - p.y <= STEP) {
@@ -43,18 +44,19 @@
   // Muove in verticale: atterra sopra le scatole oppure sbatte la testa sotto
   function moveVertical(player, boxes, dy) {
     const p = player.position;
+    const h = player.height || H;
     p.y += dy;
     player.onGround = false;
 
     for (const b of boxes) {
-      if (b.solid === false || !overlaps(p, b)) continue;
+      if (b.solid === false || !overlaps(p, b, h)) continue;
 
       const y0 = b.y || 0;
       if (dy <= 0) {
         p.y = y0 + b.h;               // atterrato sopra la scatola
         player.onGround = true;
       } else {
-        p.y = y0 - H - EPS;           // testa contro il soffitto
+        p.y = y0 - h - EPS;           // testa contro il soffitto
       }
       player.velocity.y = 0;
     }

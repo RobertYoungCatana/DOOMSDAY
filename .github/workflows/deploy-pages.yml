@@ -1,0 +1,45 @@
+# Pubblica su GitHub Pages SOLO la build di produzione (dist/): un file JS minificato e offuscato,
+# niente sorgenti e niente source map.
+# Una volta sola, su GitHub: Settings > Pages > Build and deployment > Source = "GitHub Actions".
+name: Pubblica il gioco su GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['client/**', 'tools/**', '.github/workflows/deploy-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Strumenti di build
+        run: npm ci --prefix tools
+      - name: Build (minifica + offusca)
+        run: node tools/build.js
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

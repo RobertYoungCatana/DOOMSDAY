@@ -4,12 +4,16 @@
 // Il flusso segue EVENTI.md: GIOCA -> lobby -> START -> partita -> classifica -> lobby.
 // ATTENZIONE: non ridichiarare CONFIG qui, e' gia' globale (config.js).
 // I nickname arrivano da altri giocatori: si scrivono SEMPRE con textContent, mai con innerHTML.
+// I suggerimenti a schermo (tasti da premere) cambiano da soli tra tastiera e controller:
+// gli elementi con data-key="azione" mostrano il tasto giusto (vedi fillKeyCap e Input.label).
 
 let currentMenuState = 'MENU';
 let nickname = '';
 let enteringMatch = false;     // true finche' il mouse non e' stato bloccato la prima volta
 let padPlay = false;           // si gioca col controller senza mouse bloccato (ripreso con Start)
 let lastPrompt = '';
+let promptArgs = ['', ''];     // ultimo suggerimento chiesto (azione, testo): si ridisegna se cambia dispositivo
+let lobbyCountdown = null;     // conto alla rovescia della schermata di fine partita
 
 function byId(id) { return document.getElementById(id); }
 
@@ -69,7 +73,7 @@ function initMenu() {
     <h2>Partita finita</h2>
     <p class="winner" id="end-winner"></p>
     <ol class="scoreboard" id="end-scoreboard"></ol>
-    <p class="end-note">Tra pochi secondi si torna alla lobby.</p>
+    <p class="end-note" id="end-note">Tra pochi secondi si torna alla lobby.</p>
     <button class="pause-btn quit-btn" id="end-quit-btn" data-nav-default>Esci al menu</button>
   `;
   endMenu.style.display = 'none';
@@ -83,6 +87,12 @@ function initMenu() {
 
   setupMenuListeners();
   setupNetworkHandlers();
+  setupKeybinds();
+
+  // Ultimo dispositivo usato cambiato (tastiera <-> controller): si aggiornano tutti i tasti mostrati
+  Input.onDeviceChange(refreshDeviceHints);
+  if (window.Spectate) Spectate.onChange(refreshSpectateHud);
+  refreshDeviceHints();
 
   // Nickname ricordato dall'ultima volta
   try {
@@ -112,6 +122,8 @@ function createMainMenuHTML() {
       <button class="play-btn" id="play-btn" data-nav-default>GIOCA</button>
     </div>
     ${createSkinPanelHTML()}
+    <p class="menu-version">Versione Beta</p>
+    <p class="menu-credits">Developed by Patriche &amp; Venturini</p>
   `;
 }
 
@@ -313,6 +325,11 @@ function createHUDHTML() {
     <div class="killfeed" id="killfeed"></div>
     <div class="prompt" id="prompt"></div>
     <div class="banner" id="banner"></div>
+    <div class="spectate" id="spectate" hidden>
+      <span class="spec-label">Stai guardando</span>
+      <span class="spec-name" id="spectate-name"></span>
+      <span class="spec-hint"><span class="kc" data-key="shoot"></span> Giocatore successivo</span>
+    </div>
   `;
 }
 
@@ -344,16 +361,19 @@ function createSettingsHTML() {
         <p class="settings-hint">Mentre miri (tasto destro) la visuale gira più piano. 100% = normale, meno = più preciso, più = più veloce.</p>
 
         <h3>Comandi</h3>
+        <p class="settings-hint">Clicca un comando e premi il nuovo tasto (Esc annulla). Se il tasto è già usato, i due comandi si scambiano.</p>
+        <div class="keybinds" id="keybinds"></div>
+        <div class="settings-row">
+          <label for="crouch-mode-key">Accovacciati</label>
+          <button class="toggle-btn" id="crouch-mode-key" type="button" data-device="kbm"></button>
+        </div>
         <ul class="settings-controls">
-          <li><span class="key">W A S D</span>Muoviti</li>
-          <li><span class="key">Spazio</span>Salta</li>
-          <li><span class="key">Shift</span>Corri</li>
-          <li><span class="key">Click</span>Spara</li>
-          <li><span class="key">Tasto destro</span>Mira</li>
-          <li><span class="key">E</span>Raccogli</li>
+          <li><span class="key">Clic sinistro</span>Spara</li>
+          <li><span class="key">Clic destro</span>Mira</li>
           <li><span class="key">Esc</span>Pausa</li>
           <li><span class="key">Frecce · Invio</span>Muoviti nei menu · Conferma</li>
         </ul>
+        <button class="controls-btn keys-reset-btn" id="keys-reset-btn" type="button">Ripristina tasti predefiniti</button>
       </section>
 
       <section class="settings-panel" data-panel="pad" role="tabpanel" aria-label="Controller" hidden>
@@ -379,9 +399,15 @@ function createSettingsHTML() {
           <li><span class="key">Grilletto sx</span>Mira</li>
           <li><span class="key">A / Croce</span>Salta</li>
           <li><span class="key">Premi levetta sx</span>Corri</li>
+          <li><span class="key">Premi levetta dx</span>Accovacciati</li>
           <li><span class="key">Y / Triangolo</span>Raccogli</li>
           <li><span class="key">Start / Options</span>Pausa</li>
+          <li><span class="key">RT / RB</span>Da eliminato: cambia giocatore</li>
         </ul>
+        <div class="settings-row">
+          <label for="crouch-mode-pad">Accovacciati (R3)</label>
+          <button class="toggle-btn" id="crouch-mode-pad" type="button" data-device="pad"></button>
+        </div>
         <h3>Nei menu</h3>
         <ul class="settings-controls">
           <li><span class="key">Croce direzionale</span>Muoviti (anche levetta sx)</li>
@@ -482,12 +508,17 @@ function setupNetworkHandlers() {
   });
 
   Network.on('hurt', flashHurt);
+  Network.on('otherEliminated', (d) => { if (window.Spectate) Spectate.onEliminated(d.id, d.killerId); });
+  Network.on('left', (id) => { if (window.Spectate) Spectate.onLeft(id); });
   Network.on('kill', addKillFeed);
   Network.on('hit', showDamageNumber);
 
-  Network.on('eliminated', (killerName) => {
+  // Eliminato: la telecamera passa da sola su chi ti ha eliminato (modalita' spettatore)
+  Network.on('eliminated', (killerName, killerId) => {
     Player.setDead(true);
+    setPrompt('');
     byId('banner').textContent = killerName ? 'Eliminato da ' + killerName : 'Sei stato eliminato';
+    if (window.Spectate) Spectate.start(killerId);
   });
 
   Network.on('shot', (d) => {
@@ -501,6 +532,8 @@ function setupNetworkHandlers() {
   Network.on('gameover', showEnd);
 
   Network.on('backToLobby', () => {
+    stopLobbyCountdown();
+    if (window.Spectate) Spectate.stop();
     Player.setDead(false);
     byId('banner').textContent = '';
     showEl('end-menu', 'none');
@@ -702,6 +735,7 @@ function openSettings() {
 }
 
 function closeSettings() {
+  if (Input.isCapturing()) Input.cancelCapture();
   showEl('settings-overlay', 'none');
   if (padStatusTimer) { clearInterval(padStatusTimer); padStatusTimer = null; }
 }
@@ -804,12 +838,50 @@ function updateCrosshair() {
   byId('hud').classList.toggle('aiming', ch.aim > 0.5);
 }
 
-// Testo "premi E" quando si e' vicini a un oggetto (cambia il DOM solo se il testo cambia)
-function setPrompt(text) {
-  if (text === lastPrompt) return;
-  lastPrompt = text;
+// Tasto da premere per un'azione, come lo mostra il dispositivo in uso (E da tastiera, Y col controller...)
+function fillKeyCap(el, action) {
+  const l = Input.label(action || el.dataset.key);
+  el.textContent = l.text;
+  el.className = 'kc' + (l.device === 'pad' ? ' kc-pad ' + l.cls : '');
+}
+
+function makeKeyCap(action) {
+  const span = document.createElement('span');
+  span.dataset.key = action;
+  fillKeyCap(span, action);
+  return span;
+}
+
+// Suggerimento vicino a un oggetto: setPrompt('interact', 'Raccogli Medikit') -> [E] Raccogli Medikit.
+// setPrompt('') lo toglie. Cambia il DOM solo se cambia qualcosa (anche il dispositivo usato).
+function setPrompt(action, text) {
+  promptArgs = [action || '', text || ''];
+  const key = promptArgs.join('|') + '|' + Input.lastDevice() + '|' + Input.padType();
+  if (key === lastPrompt) return;
+  lastPrompt = key;
   const el = byId('prompt');
-  if (el) el.textContent = text;
+  if (!el) return;
+  el.textContent = '';
+  if (!action && !text) return;
+  if (action) el.appendChild(makeKeyCap(action));
+  if (text) el.appendChild(document.createTextNode(' ' + text));
+}
+
+// Tastiera <-> controller: aggiorna tutti i tasti mostrati a schermo
+function refreshDeviceHints() {
+  document.querySelectorAll('[data-key]').forEach((el) => fillKeyCap(el));
+  setPrompt(promptArgs[0], promptArgs[1]);
+  if (currentMenuState === 'PAUSED') refreshPauseNote();
+}
+
+// Pannello spettatore: nome del giocatore che si sta guardando
+function refreshSpectateHud(targetId) {
+  const box = byId('spectate');
+  if (!box) return;
+  const active = !!(window.Spectate && Spectate.isActive());
+  box.hidden = !active;
+  byId('hud').classList.toggle('spectating', active);
+  byId('spectate-name').textContent = targetId ? (Network.nameOf(targetId) || 'Giocatore') : 'Nessuno da guardare';
 }
 
 function flashClass(cls, ms) {
@@ -818,21 +890,25 @@ function flashClass(cls, ms) {
   hud.classList.add(cls);
   setTimeout(() => hud.classList.remove(cls), ms);
 }
-function flashHurt() { flashClass('hurt', 250); }
+// Colpito: lampo rosso, oppure blu se il colpo l'ha preso lo scudo
+function flashHurt(info) { flashClass(info && info.shield ? 'hurt-shield' : 'hurt', 250); }
 function hitMarker() { flashClass('hit', 130); }
 
 
 function showDamageNumber(d) {
   if (currentMenuState !== 'PLAYING' || !d) return;
 
-  const v = new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.4, d.y + 2.0, d.z);
+  const v = new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.4, d.y + (d.crouch ? 1.6 : 2.0), d.z);
   v.project(Render.camera());
   if (v.z > 1) return;
 
   if (d.headshot && window.GameAudio) window.GameAudio.playHeadshot();
 
+  // Bersaglio con lo scudo ancora attivo: numero BLU (stile Fortnite). Server vecchi: campo assente.
+  const onShield = d.shield === true || d.shieldDamage > 0;
   const el = document.createElement('div');
-  el.className = 'dmg-number' + (d.headshot ? ' headshot' : '') + (d.killed ? ' kill' : '');
+  el.className = 'dmg-number' + (onShield ? ' dmg-shield' : '') + (d.shieldBroken ? ' dmg-shield-break' : '') +
+    (d.headshot ? ' headshot' : '') + (d.killed ? ' kill' : '');
   el.textContent = Math.round(d.damage) + (d.headshot ? ' HS' : '');
   el.style.left = ((v.x + 1) / 2 * window.innerWidth) + 'px';
   el.style.top = ((1 - v.y) / 2 * window.innerHeight) + 'px';
@@ -857,7 +933,9 @@ function addKillFeed(e) {
 }
 
 function lockPointer() {
-  Render.renderer().domElement.requestPointerLock();
+  // Nei browser nuovi restituisce una promise: se il blocco viene rifiutato ci pensa 'pointerlockerror'
+  const p = Render.renderer().domElement.requestPointerLock();
+  if (p && typeof p.catch === 'function') p.catch(() => {});
 }
 
 // ---------------------------------------------------------------
@@ -909,16 +987,27 @@ function togglePause() {
   if (currentMenuState !== 'PLAYING') return;
   currentMenuState = 'PAUSED';     // PRIMA di rilasciare il mouse, cosi' non scatta due volte
   byId('pause-title').textContent = enteringMatch ? 'Si parte' : 'Pausa';
-  byId('pause-note').textContent = enteringMatch
-    ? 'La partita è iniziata. Clicca per entrare.'
-    : 'La partita continua: gli altri giocatori possono colpirti.';
   byId('resume-btn').textContent = enteringMatch ? 'Entra in partita' : 'Riprendi';
-  if (Input.isGamepadConnected()) {
-    byId('pause-note').textContent += ' Controller: croce per scegliere, A per confermare, Start per ' +
-      (enteringMatch ? 'entrare.' : 'riprendere.');
-  }
+  refreshPauseNote();
   showEl('pause-menu', 'block');
   if (document.pointerLockElement) document.exitPointerLock();
+}
+
+// Testo della pausa: col controller mostra i suoi tasti (A conferma, Start riprende)
+function refreshPauseNote() {
+  const note = byId('pause-note');
+  if (!note) return;
+  note.textContent = enteringMatch
+    ? 'La partita è iniziata. '
+    : 'La partita continua: gli altri giocatori possono colpirti. ';
+  if (Input.lastDevice() === 'pad') {
+    note.appendChild(makeKeyCap('confirm'));
+    note.appendChild(document.createTextNode(' conferma · '));
+    note.appendChild(makeKeyCap('pause'));
+    note.appendChild(document.createTextNode(enteringMatch ? ' entra in partita' : ' riprendi'));
+  } else if (enteringMatch) {
+    note.appendChild(document.createTextNode('Clicca per entrare.'));
+  }
 }
 
 // fromPad = ripresa col controller (Start, B, oppure A su "Riprendi"): il browser non permette
@@ -944,6 +1033,8 @@ function onPadPause() {
 // Torna al menu principale (con un messaggio, se serve)
 function leaveToMenu(message) {
   Network.leave();
+  stopLobbyCountdown();
+  if (window.Spectate) Spectate.stop();
   Player.setDead(false);
   currentMenuState = 'MENU';
   enteringMatch = false;
@@ -966,7 +1057,9 @@ function leaveToMenu(message) {
 function showEnd(data) {
   if (currentMenuState === 'MENU' || currentMenuState === 'CONNECTING') return;
   currentMenuState = 'ENDED';
+  if (window.Spectate) Spectate.stop();
   if (document.pointerLockElement) document.exitPointerLock();   // altrimenti non si puo' cliccare
+  startLobbyCountdown(Number(data.returnIn) > 0 ? Number(data.returnIn) : 8);   // server vecchi: 8 secondi
 
   byId('end-winner').textContent = data.winnerName
     ? 'Ha vinto ' + data.winnerName
@@ -989,6 +1082,113 @@ function showEnd(data) {
   showEl('pause-menu', 'none');
   showEl('hud', 'none');
   showEl('end-menu', 'block');
+}
+
+// Conto alla rovescia "si torna alla lobby tra N secondi" (il server manda returnIn con gameOver)
+function startLobbyCountdown(seconds) {
+  stopLobbyCountdown();
+  const end = Date.now() + seconds * 1000;
+  const note = byId('end-note');
+  let shown = -1;
+  const tick = () => {
+    const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    if (left === shown) return;
+    shown = left;
+    note.textContent = '';
+    if (left > 0) {
+      note.appendChild(document.createTextNode('Si torna alla lobby tra '));
+      const n = document.createElement('strong');
+      n.className = 'countdown';
+      n.textContent = left;
+      note.appendChild(n);
+      note.appendChild(document.createTextNode(left === 1 ? ' secondo' : ' secondi'));
+    } else {
+      note.textContent = 'Ritorno alla lobby…';
+      stopLobbyCountdown();
+    }
+  };
+  tick();
+  lobbyCountdown = setInterval(tick, 200);
+}
+
+function stopLobbyCountdown() {
+  if (lobbyCountdown) { clearInterval(lobbyCountdown); lobbyCountdown = null; }
+}
+
+// ---------------------------------------------------------------
+// Comandi rimappabili (Impostazioni > Tastiera e mouse) e modalita' di accovacciamento
+// ---------------------------------------------------------------
+const CROUCH_MODE_TEXT = { hold: 'Tieni premuto', toggle: 'Premi una volta' };
+let capturingBtn = null;
+
+function setupKeybinds() {
+  const box = byId('keybinds');
+  Input.actions().forEach((a) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'keybind';
+    b.dataset.action = a.id;
+    const name = document.createElement('span');
+    name.className = 'kb-label';
+    name.textContent = a.label;
+    const key = document.createElement('span');
+    key.className = 'key';
+    b.appendChild(name);
+    b.appendChild(key);
+    b.addEventListener('click', () => startRebind(b));
+    box.appendChild(b);
+  });
+  byId('keys-reset-btn').addEventListener('click', () => {
+    Input.cancelCapture();
+    Input.resetBindings();
+    refreshKeybinds();
+  });
+  ['crouch-mode-key', 'crouch-mode-pad'].forEach((id) => {
+    byId(id).addEventListener('click', () => {
+      const dev = byId(id).dataset.device;
+      Input.setCrouchMode(dev, Input.getCrouchMode(dev) === 'hold' ? 'toggle' : 'hold');
+      refreshKeybinds();
+    });
+  });
+  // Clic fuori dal comando che aspetta un tasto: si annulla
+  document.addEventListener('mousedown', (e) => {
+    if (capturingBtn && !capturingBtn.contains(e.target)) Input.cancelCapture();
+  }, true);
+  refreshKeybinds();
+}
+
+function refreshKeybinds() {
+  document.querySelectorAll('#keybinds .keybind').forEach((b) => {
+    if (b === capturingBtn) return;
+    b.querySelector('.key').textContent = Input.keyName(Input.getBinding(b.dataset.action));
+  });
+  byId('crouch-mode-key').textContent = CROUCH_MODE_TEXT[Input.getCrouchMode('kbm')];
+  byId('crouch-mode-pad').textContent = CROUCH_MODE_TEXT[Input.getCrouchMode('pad')];
+  refreshDeviceHints();
+}
+
+function startRebind(btn) {
+  // I tasti si cambiano dalla tastiera: col controller (A) non si puo' scrivere un tasto
+  if (window.MenuNav && MenuNav.fromPad()) {
+    btn.classList.remove('flash');
+    void btn.offsetWidth;
+    btn.classList.add('flash');
+    return;
+  }
+  Input.cancelCapture();
+  capturingBtn = btn;
+  btn.classList.add('capturing');
+  btn.querySelector('.key').textContent = 'Premi un tasto…';
+  Input.captureKey((code) => {
+    btn.classList.remove('capturing');
+    capturingBtn = null;
+    if (code && !Input.setBinding(btn.dataset.action, code)) {
+      btn.querySelector('.key').textContent = 'Tasto non valido';
+      setTimeout(refreshKeybinds, 900);
+      return;
+    }
+    refreshKeybinds();
+  });
 }
 
 // input.js chiama window.togglePause se arriva il keydown di ESC

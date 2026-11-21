@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOOMSDAY</title>
+  <link rel="icon" type="image/jpeg" href="assets/doomsday-icon.jpg">
+  <link rel="stylesheet" href="doomsday.css?v=8">
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>window.DOOMSDAY_SERVER_URL = "https://doomsday-bs3b.onrender.com";</script>
+
+  <!-- In locale si puo' sovrascrivere l'indirizzo con ?server=http://localhost:3000. -->
+
+  <!-- Three.js da CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- I personaggi sono fatti a codice (js/characters.js). Per usare di nuovo modelli .gltf scaricati
+       rimettere qui lo script GLTFLoader (three@0.128.0/examples/js/loaders/GLTFLoader.js). -->
+
+  <!-- I nostri file JS (ordine dipendenze). ?v=8 = versione: aumentala quando cambi i file,
+       cosi' i browser scaricano quelli nuovi invece di usare la copia vecchia in cache. -->
+  <script src="js/shared/weapons.js?v=8"></script>
+  <script src="js/config.js?v=8"></script>
+  <script src="js/audio.js?v=8"></script>
+  <script src="js/music.js?v=8"></script>
+  <script src="js/shared/map.js?v=8"></script>
+  <script src="js/render.js?v=8"></script>
+  <script src="js/models.js?v=8"></script>
+  <script src="js/characters.js?v=8"></script>
+  <script src="js/skins.js?v=8"></script>
+  <script src="js/collision.js?v=8"></script>
+  <script src="js/arena.js?v=8"></script>
+  <script src="js/player.js?v=8"></script>
+  <script src="js/input.js?v=8"></script>
+  <script src="js/network.js?v=8"></script>
+  <script src="js/spectate.js?v=8"></script>
+  <script src="js/menu.js?v=8"></script>
+  <script src="js/menunav.js?v=8"></script>
+  <script src="js/main.js?v=8"></script>
+</body>
+</html>

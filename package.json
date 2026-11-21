@@ -5,7 +5,9 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "dev": "node server/server.js"
+    "dev": "node server/server.js",
+    "build:client": "npm install --prefix tools && node tools/build.js",
+    "build:client:debug": "npm install --prefix tools && node tools/build.js --no-obfuscate --no-guard"
   },
   "dependencies": {
     "cors": "^2.8.6",

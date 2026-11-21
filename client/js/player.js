@@ -11,6 +11,8 @@ const player = {
   velocity: new THREE.Vector3(0, 0, 0),
   onGround: false,
   isRunning: false,
+  crouching: false,                         // accovacciato (Shift / R3): piu' basso e piu' lento
+  height: 1.8,                              // altezza per le collisioni (piu' bassa da accovacciati)
   dead: false,                              // eliminato: resta a guardare
   fireCooldown: 0,                          // secondi prima del prossimo colpo
 };
@@ -20,6 +22,13 @@ const MAX_RANGE = 100;          // metri: portata usata se un'arma non ne indica
 const MISS_DISTANCE = 250;      // un colpo a vuoto si manda al server qui: fuori mappa, non colpisce nessuno
 const AIM_TIME = 0.14;          // secondi per entrare/uscire dalla mira
 const AIM_MOVE_SPEED = 0.6;     // mirando si cammina piu' piano (e non si corre)
+const STAND_HEIGHT = 1.8;       // altezza del giocatore in piedi (collisioni)
+const CROUCH_HEIGHT = 1.35;     // altezza da accovacciato: si passa sotto gli ostacoli bassi
+const CROUCH_EYE = (CONFIG.CAMERA && CONFIG.CAMERA.CROUCH_HEIGHT) || 1.2;   // occhi da accovacciato
+const CROUCH_SPEED = (CONFIG.MOVEMENT && CONFIG.MOVEMENT.CROUCH_SPEED) || 0.5;  // velocita' (x camminata)
+const CROUCH_TIME = 0.12;       // secondi per abbassarsi / rialzarsi
+// Mirando l'arma scende un po' sotto il mirino, cosi' non lo copre (il mirino resta dov'e')
+const ADS_DROP = 0.026;
 
 const prevPosition = new THREE.Vector3();   // posizione al passo di fisica precedente (camera morbida)
 
@@ -27,6 +36,8 @@ let triggerWasDown = false;
 let interactWasDown = false;
 let collectCooldown = 0;
 let shownWeapon = '';
+let crouchAmount = 0;           // 0 = in piedi, 1 = accovacciato (per la camera, sfuma)
+let prevCrouchAmount = 0;
 
 // Arma attuale, decisa dal server (pistola di partenza, poi quella raccolta)
 function currentWeapon() {
@@ -124,7 +135,12 @@ function spawnPlayer(x, z, y = 0) {
   p.velocity.set(0, 0, 0);
   p.onGround = false;
   p.dead = false;
+  p.crouching = false;
+  p.height = STAND_HEIGHT;
   p.fireCooldown = 0;
+  crouchAmount = 0;
+  prevCrouchAmount = 0;
+  if (window.Input && Input.resetCrouch) Input.resetCrouch();
   triggerWasDown = false;
   interactWasDown = false;
   collectCooldown = 0;
@@ -140,16 +156,33 @@ function setDead(dead) {
   if (dead) player.velocity.set(0, player.velocity.y, 0);
 }
 
+// Altezza degli occhi: in piedi CONFIG.CAMERA.HEIGHT, accovacciati piu' in basso (sfuma)
+function eyeHeight(amount) {
+  const a = ease(amount === undefined ? crouchAmount : amount);
+  return CONFIG.CAMERA.HEIGHT + (CROUCH_EYE - CONFIG.CAMERA.HEIGHT) * a;
+}
+
 // La camera segue i piedi + altezza occhi (cosi' si vede anche il salto)
 function updatePlayerCamera() {
   const yaw = Render.yawPivot();
   if (yaw) {
     yaw.position.set(
       player.position.x,
-      player.position.y + CONFIG.CAMERA.HEIGHT,
+      player.position.y + eyeHeight(),
       player.position.z
     );
   }
+}
+
+// Accovacciamento: ci si abbassa subito; ci si rialza solo se sopra la testa c'e' spazio
+function updateCrouch(dt) {
+  prevCrouchAmount = crouchAmount;
+  const want = !player.dead && Input.isCrouching();
+  if (want) player.crouching = true;
+  else if (player.crouching && !overlapsSolid(player.position.x, player.position.y, player.position.z)) player.crouching = false;
+  player.height = player.crouching ? CROUCH_HEIGHT : STAND_HEIGHT;
+  const step = dt / CROUCH_TIME;
+  crouchAmount += Math.max(-step, Math.min(step, (player.crouching ? 1 : 0) - crouchAmount));
 }
 
 // ---------------------------------------------------------------
@@ -285,9 +318,11 @@ function animateViewModel(dt) {
   if (player.onGround) bobPhase += dt * speed * 1.7;
   const bob = (1 - a) * Math.min(1, speed / CONFIG.MOVEMENT.RUN_SPEED) * 0.014;
 
-  // Fianco -> centro (le tacche di mira sulla linea dello sguardo)
+  // Fianco -> centro: le tacche di mira vanno sulla linea dello sguardo, ma un po' piu' in basso
+  // (ADS_DROP o adsDrop dell'arma), cosi' l'arma non copre il mirino
+  const drop = info.adsDrop !== undefined ? info.adsDrop : ADS_DROP;
   const x = info.hip[0] * (1 - a) + Math.cos(bobPhase) * bob;
-  const y = info.hip[1] * (1 - a) - info.sight * a - Math.abs(Math.sin(bobPhase)) * bob - switchAnim * 0.22;
+  const y = info.hip[1] * (1 - a) - (info.sight + drop) * a - Math.abs(Math.sin(bobPhase)) * bob - switchAnim * 0.22;
   const z = info.hip[2] * (1 - a) + info.adsZ * a + recoil * 0.06 * info.kick;
   viewModel.position.set(x, y, z);
   viewModel.rotation.set(recoil * 0.12 * info.kick - switchAnim * 0.5, 0.05 * (1 - a), 0);
@@ -323,7 +358,7 @@ function fire(name, w) {
 
   const yaw = Render.yawPivot().rotation.y;
   const pitch = Render.pitchPivot().rotation.x;
-  const eye = new THREE.Vector3(player.position.x, player.position.y + CONFIG.CAMERA.HEIGHT, player.position.z);
+  const eye = new THREE.Vector3(player.position.x, player.position.y + eyeHeight(), player.position.z);
   const range = w.range || MAX_RANGE;
   const spread = currentSpread();
 
@@ -388,7 +423,8 @@ function updateInteract(dt) {
 
   const near = player.dead ? null : Network.nearestItem(player.position);
   if (typeof window.setPrompt === 'function') {
-    window.setPrompt(near ? 'E  ·  ' + near.name : '');
+    // il tasto mostrato (E, Y, triangolo...) lo sceglie menu.js in base al dispositivo usato
+    window.setPrompt(near ? 'interact' : '', near ? 'Raccogli ' + near.name : '');
   }
 
   const pressed = Input.isInteracting();
@@ -409,11 +445,14 @@ function updatePlayerMovement(dt) {
   prevPosition.copy(player.position);
 
   updateAim(dt);
-  player.isRunning = !player.dead && Input.isRunning() && aim.amount < 0.5;   // mirando non si corre
+  updateCrouch(dt);
+  // mirando o accovacciati non si corre
+  player.isRunning = !player.dead && !player.crouching && Input.isRunning() && aim.amount < 0.5;
 
   // --- Velocita' desiderata dall'input (da eliminati ci si ferma) ---
   const move = player.dead ? { x: 0, z: 0 } : Input.getMove();
-  const baseSpeed = player.isRunning ? CONFIG.MOVEMENT.RUN_SPEED : CONFIG.MOVEMENT.WALK_SPEED;
+  let baseSpeed = player.isRunning ? CONFIG.MOVEMENT.RUN_SPEED : CONFIG.MOVEMENT.WALK_SPEED;
+  if (player.crouching) baseSpeed = CONFIG.MOVEMENT.WALK_SPEED * CROUCH_SPEED;
   const speed = baseSpeed * (1 + (AIM_MOVE_SPEED - 1) * aim.amount);
   const vx = move.x * speed;
   const vz = move.z * speed;
@@ -460,9 +499,10 @@ function smoothCamera(alpha) {
   const yaw = Render.yawPivot();
   if (!yaw) return;
   const a = Math.max(0, Math.min(1, alpha));
+  const eye = eyeHeight(prevCrouchAmount + (crouchAmount - prevCrouchAmount) * a);
   yaw.position.set(
     prevPosition.x + (player.position.x - prevPosition.x) * a,
-    prevPosition.y + (player.position.y - prevPosition.y) * a + CONFIG.CAMERA.HEIGHT,
+    prevPosition.y + (player.position.y - prevPosition.y) * a + eye,
     prevPosition.z + (player.position.z - prevPosition.z) * a
   );
 }
@@ -481,6 +521,8 @@ const Player = {
   lookScale: lookScale,
   crosshair: crosshairInfo,
   isAiming: () => aim.amount > 0.5,
+  isCrouching: () => player.crouching,
+  eyeHeight: () => eyeHeight(),
   aimAmount: () => aim.amount,       // 0 = arma al fianco, 1 = mira completa (per la sensibilita' in mira)
   // Il server gestisce: niente ricarica, cambio arma o danni locali
   selectWeapon: () => {},

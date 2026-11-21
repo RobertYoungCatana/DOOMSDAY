@@ -15,6 +15,7 @@ const CONFIG = {
   MOVEMENT: {
     WALK_SPEED: 5,          // m/s
     RUN_SPEED: 9,           // m/s
+    CROUCH_SPEED: 0.5,      // accovacciati: velocita' rispetto alla camminata (0.5 = meta')
     JUMP_FORCE: 7,          // forza salto (m/s)
     GRAVITY: 20,            // m/s^2
     AIR_CONTROL: 0.15,      // controllo in aria (0-1)
@@ -27,6 +28,7 @@ const CONFIG = {
   CAMERA: {
     FOV: 75,
     HEIGHT: 1.75,           // altezza occhi dal terreno
+    CROUCH_HEIGHT: 1.2,     // altezza occhi da accovacciati
     NEAR: 0.1,
     FAR: 200,
   },
@@ -58,7 +60,7 @@ const CONFIG = {
   // --- Rete ---
   NETWORK: {
     UPDATE_RATE: 20,        // Hz (aggiornamenti al secondo)
-    SERVER_VERSION: 5,      // versione del server che serve a questo client (vedi server.js)
+    SERVER_VERSION: 6,      // versione del server che serve a questo client (vedi server.js)
     INTERPOLATION: 0.2,     // secondi di interpoltazione
   },
 

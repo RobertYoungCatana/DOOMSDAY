@@ -13,13 +13,29 @@ const WEAPONS = require('../client/js/shared/weapons.js');
 // Collisioni condivise con il client: servono per controllare che tra chi spara e il bersaglio
 // non ci sia un muro (cosi' ripararsi dietro un riparo funziona davvero)
 const collision = require('../client/js/collision.js');
+// Dove compare il loot: punti casuali raggiungibili a piedi (solo server, vedi loot.js)
+const { buildLoot } = require('./loot.js');
 
 // Versione del server: il menu del gioco la legge e avvisa se il server online e' rimasto indietro
 // (personaggi, armi e mappa nuovi si vedono solo con il server aggiornato)
-const SERVER_VERSION = 5;
+const SERVER_VERSION = 6;
+
+// Siti autorizzati a usare il server (CORS), separati da virgola. Vuoto = tutti.
+// Esempio su Render: ALLOWED_ORIGINS=https://nomeutente.github.io
+const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
+const corsOrigin = ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : '*';
 
 const app = express();
-app.use(cors());
+app.disable('x-powered-by');                 // non dice a tutti che e' Express
+app.use(cors({ origin: corsOrigin }));
+// Header di sicurezza su tutte le risposte HTTP
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+});
 
 // Pagina di stato: utile per "svegliare" Render e per l'indicatore server del menu
 app.get('/', (req, res) => {
@@ -29,7 +45,7 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "*",
+        origin: corsOrigin,
         methods: ["GET", "POST"]
     }
 });
@@ -43,9 +59,16 @@ const FIRST_DEATH_ENDS_MATCH = false; // true = la partita finisce alla PRIMA mo
 const HIT_RADIUS = 2;                // client vecchi: distanza massima (dal punto dello sparo) per colpire un giocatore
 const HIT_TOLERANCE = 1.5;           // client nuovi: quanto il punto colpito puo' stare lontano dal bersaglio (ritardo di rete)
 const HEAD_HEIGHT = 1.4;             // altezza minima dai piedi del bersaglio perche' il colpo sia alla testa
-const MAX_ITEMS = 5;
-const ITEM_RESPAWN_MS = 15000;
+const CROUCH_HEAD_HEIGHT = 0.97;     // ...se il bersaglio e' accovacciato (testa piu' in basso)
+const BASE_ITEMS = 7;                // oggetti sulla mappa con 2 giocatori (prima erano 5)...
+const MAX_ITEMS = 12;                // ...+1 per ogni giocatore in piu', fino a questo massimo
+const ITEM_RESPAWN_MS = 10000;       // ogni 10 secondi ne ricompare uno (prima 15)
 const LOBBY_RETURN_MS = 8000;        // dopo il game over, torna alla lobby dopo 8 secondi
+// Anti-trucchi: il server controlla cadenza di fuoco e velocita' (i client possono essere modificati)
+const SHOT_BURST = 4;                // colpi "di scorta" per il ritardo di rete
+const SHOT_RATE_TOLERANCE = 0.85;    // si accetta fino al 15% piu' veloce della cadenza dell'arma
+const MAX_MOVE_SPEED = 13;           // m/s in orizzontale (corsa 9 + margine)
+const MOVE_SLACK = 1.5;              // metri di tolleranza per il ritardo di rete
 
 // ================= STATO =================
 const players = {};
@@ -55,8 +78,14 @@ let gameState = 'lobby'; // 'lobby' | 'playing' | 'ended'
 // Oggetti che compaiono sulla mappa: cure, munizioni, giubbotto e tutte le armi tranne la pistola
 const ITEM_TYPES = ['medkit', 'ammo', 'armor'].concat(Object.keys(WEAPONS).filter(w => w !== 'pistol'));
 
-function randomPos() {
-    return { x: Math.random() * 30 - 15, z: Math.random() * 30 - 15 };
+// Punti casuali per il loot, calcolati una volta all'avvio dalla mappa
+const LOOT = buildLoot(MAP);
+console.log('Loot: ' + LOOT.groundCount + ' punti a terra raggiungibili + ' + LOOT.specialCount + ' punti speciali');
+
+// Quanti oggetti tenere sulla mappa: qualcuno in piu' se ci sono piu' giocatori
+function maxItems() {
+    const n = Object.keys(players).length;
+    return Math.min(MAX_ITEMS, BASE_ITEMS + Math.max(0, n - 2));
 }
 
 function shuffle(arr) {
@@ -73,17 +102,11 @@ function alivePlayers() {
 }
 
 // ================= OGGETTI =================
-// Sceglie una posizione libera tra quelle della mappa (MAP.pickups), con la sua altezza
-function freeItemSlot() {
-    const used = Object.values(items).map(i => i.x + ',' + i.z);
-    const free = MAP.pickups.filter(p => !used.includes(p.x + ',' + p.z));
-    const list = free.length ? free : MAP.pickups;
-    return list[Math.floor(Math.random() * list.length)];
-}
-
+// Posizione e tipo sono casuali: un punto qualsiasi della mappa raggiungibile a piedi
+// (ogni tanto sui tetti e sulle piattaforme), lontano dagli altri oggetti.
 function spawnItem(id) {
     const itemId = id || `item_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const slot = freeItemSlot();
+    const slot = LOOT.randomSpot(Object.values(items));
     items[itemId] = {
         id: itemId,
         type: ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)],
@@ -96,12 +119,13 @@ function spawnItem(id) {
 
 function resetItems() {
     Object.keys(items).forEach(k => delete items[k]);
-    for (let i = 1; i <= MAX_ITEMS; i++) spawnItem(`item_${i}`);
+    const n = maxItems();
+    for (let i = 1; i <= n; i++) spawnItem(`item_${i}`);
 }
 
 // Respawn automatico degli oggetti (solo durante la partita)
 setInterval(() => {
-    if (gameState === 'playing' && Object.keys(items).length < MAX_ITEMS) {
+    if (gameState === 'playing' && Object.keys(items).length < maxItems()) {
         const item = spawnItem();
         console.log(`📦 Nuovo oggetto comparso: ${item.type}`);
         io.emit('itemSpawned', item);
@@ -138,6 +162,10 @@ function startMatch() {
         p.ammo = 30;
         p.kills = 0;
         p.isDead = false;
+        p.crouch = false;
+        p.lastMoveAt = 0;          // la prima posizione dopo lo spawn si accetta sempre
+        p.shotTokens = SHOT_BURST;
+        p.shotAt = Date.now();
     });
 
     console.log(`🚀 PARTITA INIZIATA con ${Object.keys(players).length} giocatori`);
@@ -156,7 +184,8 @@ function endMatch(winner) {
     io.emit('gameOver', {
         winnerId: winner ? winner.id : null,
         winnerName: winner ? winner.name : null,
-        scoreboard
+        scoreboard,
+        returnIn: LOBBY_RETURN_MS / 1000      // secondi prima di tornare alla lobby (per il conto alla rovescia)
     });
 
     // Dopo qualche secondo si torna alla lobby per una nuova partita
@@ -183,30 +212,33 @@ function checkEndOfMatch(lastKiller) {
 // Applica danno (prima lo scudo, poi la vita). Ritorna true se il giocatore muore.
 function damagePlayer(victim, amount, killer, headshot) {
     let remaining = amount;
+    const shieldBefore = victim.shield || 0;
+    let absorbed = 0;
     if (victim.shield > 0) {
-        const absorbed = Math.min(victim.shield, remaining);
+        absorbed = Math.min(victim.shield, remaining);
         victim.shield -= absorbed;
         remaining -= absorbed;
     }
     victim.hp -= remaining;
 
-
-
-    // Conferma del colpo SOLO a chi ha sparato (serve per mostrare il danno)
+    // Conferma del colpo SOLO a chi ha sparato (serve per mostrare il danno).
+    // shield = il bersaglio aveva ancora scudo: il numero del danno si mostra BLU (stile Fortnite).
     if (killer) {
         io.to(killer.id).emit('hitConfirmed', {
             targetId: victim.id,
             damage: amount,
+            shieldDamage: absorbed,
+            healthDamage: remaining,
+            shield: shieldBefore > 0,
+            shieldBroken: shieldBefore > 0 && victim.shield <= 0,
             x: victim.x,
             y: victim.y,
             z: victim.z,
+            crouch: !!victim.crouch,
             killed: victim.hp <= 0,
             headshot: !!headshot
-
         });
     }
-
-    
 
     io.to(victim.id).emit('playerDamaged', { newHp: Math.max(0, victim.hp), newShield: victim.shield });
 
@@ -246,7 +278,7 @@ function shotOrigin(shooter, s) {
 function hitIsPlausible(shooter, target, s, weapon) {
     if (![s.x, s.y, s.z].every(Number.isFinite)) return false;
     if (Math.hypot(s.x - target.x, s.z - target.z) > HIT_TOLERANCE) return false;
-    if (s.y < target.y - 0.5 || s.y > target.y + 2.3) return false;
+    if (s.y < target.y - 0.5 || s.y > target.y + (target.crouch ? 1.9 : 2.3)) return false;
 
     const o = shotOrigin(shooter, s);
     const dist = Math.hypot(s.x - o.x, s.y - o.y, s.z - o.z);
@@ -256,6 +288,19 @@ function hitIsPlausible(shooter, target, s, weapon) {
     const dir = { x: (s.x - o.x) / dist, y: (s.y - o.y) / dist, z: (s.z - o.z) / dist };
     const wall = collision.raycast(o, dir, dist, MAP);
     return !(wall && wall.distance < dist - 0.4);
+}
+
+// Cadenza di fuoco controllata dal server: un client modificato non puo' sparare piu' veloce dell'arma.
+// "Secchiello" di colpi: si riempie col tempo alla velocita' dell'arma, ogni colpo ne toglie uno.
+function allowShot(p, weapon) {
+    const now = Date.now();
+    const rate = Math.max(0.05, weapon.fireRate || 0.3) * SHOT_RATE_TOLERANCE;
+    if (!Number.isFinite(p.shotTokens)) { p.shotTokens = SHOT_BURST; p.shotAt = now; }
+    p.shotTokens = Math.min(SHOT_BURST, p.shotTokens + (now - (p.shotAt || now)) / 1000 / rate);
+    p.shotAt = now;
+    if (p.shotTokens < 1) return false;
+    p.shotTokens -= 1;
+    return true;
 }
 
 // ================= SOCKET =================
@@ -289,7 +334,8 @@ io.on('connection', (socket) => {
             weapon: 'pistol',
             ammo: 30,
             kills: 0,
-            isDead: false
+            isDead: false,
+            crouch: false
         };
 
         socket.emit('currentPlayers', players);
@@ -328,10 +374,20 @@ io.on('connection', (socket) => {
         const { x, y, z, rotation } = movementData;
         if (![x, y, z, rotation].every(Number.isFinite)) return;
 
+        // Anti-teletrasporto: in partita non ci si sposta piu' veloce di MAX_MOVE_SPEED
+        // (la prima posizione dopo lo spawn si accetta sempre: il client corregge gli spawn nei container)
+        const now = Date.now();
+        if (gameState === 'playing' && player.lastMoveAt) {
+            const dt = Math.min(2, (now - player.lastMoveAt) / 1000);
+            if (Math.hypot(x - player.x, z - player.z) > MAX_MOVE_SPEED * dt + MOVE_SLACK) return;
+        }
+        player.lastMoveAt = now;
+
         player.x = Math.max(-MAP_LIMIT, Math.min(MAP_LIMIT, x));
         player.y = y;
         player.z = Math.max(-MAP_LIMIT, Math.min(MAP_LIMIT, z));
         player.rotation = rotation;
+        player.crouch = movementData.crouch === true;   // accovacciato: gli altri non vedono il nickname
 
         socket.broadcast.emit('playerMoved', player);
     });
@@ -346,6 +402,12 @@ io.on('connection', (socket) => {
             return;
         }
         
+
+        // Troppo veloce per l'arma in mano: colpo ignorato (il client riceve comunque la risposta)
+        if (!allowShot(shooter, WEAPONS[shooter.weapon] || WEAPONS.pistol)) {
+            socket.emit('ammoUpdated', { ammo: shooter.ammo, shot: true });
+            return;
+        }
 
         shooter.ammo -= 1;
         socket.emit('ammoUpdated', { ammo: shooter.ammo, shot: true });
@@ -373,7 +435,7 @@ io.on('connection', (socket) => {
             const target = shootData.targetId ? players[shootData.targetId] : null;
             if (!target || target.id === shooter.id || target.isDead) return;
             if (!hitIsPlausible(shooter, target, shootData, weapon)) return;
-            const headshot = shootData.y - target.y >= HEAD_HEIGHT;
+            const headshot = shootData.y - target.y >= (target.crouch ? CROUCH_HEAD_HEIGHT : HEAD_HEIGHT);
             console.log(`🎯 ${shooter.name} ha colpito ${target.name} (${shooter.weapon}${headshot ? ', HEADSHOT' : ''})`);
             damagePlayer(target, headshot ? baseDamage * 2 : baseDamage, shooter, headshot);
             return;

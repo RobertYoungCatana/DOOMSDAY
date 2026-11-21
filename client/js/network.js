@@ -23,6 +23,11 @@
   const WEAPON_GLOW = 0xa8e600;
   const HIT_R = 0.35;     // raggio del corpo di un giocatore per i colpi
   const HIT_H = 1.8;      // altezza del corpo
+  const CROUCH_HIT_H = 1.35;  // altezza del corpo da accovacciato
+  // Posa accovacciata dei personaggi: gambe aperte (una avanti, una indietro) e corpo piu' in basso.
+  // Le gambe sono lunghe 0.93 m: ruotandole di CROUCH_LEG il bacino scende di 0.93 * (1 - cos)
+  const CROUCH_LEG = 1.0;
+  const CROUCH_DROP = 0.93 * (1 - Math.cos(CROUCH_LEG));
   const PICKUP_RANGE = 1.9;   // il server accetta fino a 2 metri
 
   const st = {
@@ -159,6 +164,7 @@
     socket.on('disconnectPlayer', (id) => {
       delete st.players[id];
       removeRemote(id);
+      ui('left', id);
     });
 
     // --- Durante la partita ---
@@ -186,8 +192,11 @@
       ui('outOfAmmo');
     });
     socket.on('playerDamaged', (d) => {
-      if (me()) { me().hp = d.newHp; me().shield = d.newShield; }
-      ui('hurt');
+      const m = me();
+      // lo scudo e' sceso: il colpo l'ha preso lo scudo (effetto blu invece che rosso)
+      const shieldHit = !!(m && (m.shield || 0) > 0 && d.newShield < m.shield);
+      if (m) { m.hp = d.newHp; m.shield = d.newShield; }
+      ui('hurt', { shield: shieldHit, broken: shieldHit && d.newShield <= 0 });
     });
     socket.on('playerHealed', (d) => { if (me()) me().hp = d.newHp; });
     socket.on('shieldUpdated', (d) => { if (me()) me().shield = d.newShield; });
@@ -210,9 +219,10 @@
       if (st.players[d.id]) st.players[d.id].isDead = true;
       if (d.id === st.myId) {
         if (me()) me().hp = 0;
-        ui('eliminated', nameOf(d.killerId));
+        ui('eliminated', nameOf(d.killerId), d.killerId);
       } else {
         removeRemote(d.id);
+        ui('otherEliminated', d);
       }
     });
     socket.on('killFeed', (e) => ui('kill', e));
@@ -266,7 +276,7 @@
 
   function currentPose() {
     const p = Player.get().position;
-    return { x: p.x, y: p.y, z: p.z, rotation: Render.yawPivot().rotation.y };
+    return { x: p.x, y: p.y, z: p.z, rotation: Render.yawPivot().rotation.y, crouch: !!Player.isCrouching() };
   }
 
   // Pubblica subito la posizione (per esempio dopo lo spawn corretto)
@@ -287,7 +297,7 @@
 
     const cur = currentPose();
     const l = st.lastSent;
-    const changed = !l ||
+    const changed = !l || cur.crouch !== l.crouch ||
       Math.abs(cur.x - l.x) > 0.005 || Math.abs(cur.y - l.y) > 0.005 ||
       Math.abs(cur.z - l.z) > 0.005 || Math.abs(cur.rotation - l.rotation) > 0.002;
     if (changed || st.keepAlive > 0.5) sendMovementData(cur);
@@ -426,16 +436,23 @@
 
   function ensureRemote(p) {
     if (st.remotes[p.id] || p.id === st.myId) return;
-    // Skin scelta dal giocatore; se manca o non si carica, il vecchio modello a scatole
+    // Skin scelta dal giocatore; se manca o non si carica, il vecchio modello a scatole.
+    // group = posizione e rotazione · body = il personaggio (si abbassa da accovacciato) · plate = nickname
     const color = colorFor(p.id);
-    const group = window.Skins && Skins.list().length
+    const group = new THREE.Group();
+    const body = window.Skins && Skins.list().length
       ? Skins.createModel(p.skin, () => buildPlayerModel(color))
       : buildPlayerModel(color);
-    group.add(makeNamePlate(p.name || 'Giocatore'));
+    const plate = makeNamePlate(p.name || 'Giocatore');
+    group.add(body);
+    group.add(plate);
     group.position.set(p.x, p.y, p.z);
     group.rotation.y = p.rotation || 0;
     Render.addToScene(group);
-    st.remotes[p.id] = { group: group, target: { x: p.x, y: p.y, z: p.z, rot: p.rotation || 0 }, socket: null, weapon: null };
+    st.remotes[p.id] = {
+      group: group, body: body, plate: plate, crouch: p.crouch ? 1 : 0,
+      target: { x: p.x, y: p.y, z: p.z, rot: p.rotation || 0 }, socket: null, weapon: null,
+    };
   }
 
   function removeRemote(id) {
@@ -493,6 +510,12 @@
       g.position.x += (t.x - g.position.x) * k;
       g.position.y += (t.y - g.position.y) * k;
       g.position.z += (t.z - g.position.z) * k;
+      // Accovacciato: il personaggio si abbassa e il nickname sparisce (gli altri non lo vedono)
+      const p = st.players[id];
+      const crouched = !!(p && p.crouch);
+      r.crouch += ((crouched ? 1 : 0) - r.crouch) * Math.min(1, dt * 14);
+      if (r.body) r.body.position.y = -CROUCH_DROP * r.crouch;
+      if (r.plate) r.plate.visible = !crouched;
       animateLegs(r, Math.hypot(g.position.x - ox, g.position.z - oz) / Math.max(dt, 1e-4), dt);
       let diff = t.rot - g.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));   // strada piu' corta
@@ -525,9 +548,10 @@
     if (!r.legs) return;
     r.speed = (r.speed || 0) + (Math.min(speed, 12) - (r.speed || 0)) * Math.min(1, dt * 8);
     r.step = (r.step || 0) + dt * r.speed * 2.3;
-    const swing = Math.sin(r.step) * Math.min(1, r.speed / 4) * 0.55;
-    r.legs[0].rotation.x = swing;
-    r.legs[1].rotation.x = -swing;
+    const c = r.crouch || 0;
+    const swing = Math.sin(r.step) * Math.min(1, r.speed / 4) * 0.55 * (1 - 0.6 * c);
+    r.legs[0].rotation.x = swing + CROUCH_LEG * c;      // da accovacciato: gamba sinistra avanti...
+    r.legs[1].rotation.x = -swing - CROUCH_LEG * c;     // ...e destra indietro
   }
 
   // ---------------------------------------------------------------
@@ -559,9 +583,11 @@
     Object.keys(st.remotes).forEach((id) => {
       const p = st.players[id];
       if (!p || p.isDead) return;
-      const g = st.remotes[id].group.position;
+      const r = st.remotes[id];
+      const g = r.group.position;
+      const h = HIT_H - (HIT_H - CROUCH_HIT_H) * (r.crouch || 0);   // accovacciato: bersaglio piu' basso
       const t = rayBox(origin, dir,
-        [g.x - HIT_R, g.y, g.z - HIT_R], [g.x + HIT_R, g.y + HIT_H, g.z + HIT_R], maxDist);
+        [g.x - HIT_R, g.y, g.z - HIT_R], [g.x + HIT_R, g.y + h, g.z + HIT_R], maxDist);
       if (t !== null && (!best || t < best.distance)) {
         best = {
           id: id,
@@ -575,6 +601,21 @@
 
   function aliveCount() {
     return Object.keys(st.players).filter((id) => !st.players[id].isDead).length;
+  }
+
+  // --- Per la modalita' spettatore (spectate.js) ---
+  // Posizione disegnata di un giocatore remoto (quella che si vede, gia' interpolata)
+  function remotePose(id) {
+    const r = st.remotes[id];
+    const p = st.players[id];
+    if (!r || !p || p.isDead) return null;
+    const g = r.group;
+    return { x: g.position.x, y: g.position.y, z: g.position.z, rot: g.rotation.y, crouchDrop: CROUCH_DROP * (r.crouch || 0), name: p.name };
+  }
+
+  // Giocatori vivi (non io) che si possono guardare, in ordine stabile
+  function spectatableIds() {
+    return Object.keys(st.remotes).filter((id) => st.players[id] && !st.players[id].isDead).sort();
   }
 
   const Network = {
@@ -592,6 +633,9 @@
     players: () => st.players,
     items: () => st.items,
     aliveCount: aliveCount,
+    nameOf: nameOf,
+    remotePose: remotePose,
+    spectatableIds: spectatableIds,
     ammo: ammo,
     tick: tick,
     update: update,

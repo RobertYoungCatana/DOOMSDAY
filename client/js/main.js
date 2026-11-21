@@ -61,10 +61,17 @@ function render(frameDt) {
   }
 
   Network.update(frameDt);                 // giocatori remoti e oggetti
+  // Eliminati: la telecamera segue un altro giocatore (dopo che i giocatori remoti si sono mossi)
+  if (spectating() && (playing || currentMenuState === 'PAUSED')) Spectate.update(frameDt);
   Player.showViewModel(playing);           // l'arma in mano si vede solo mentre si gioca
   Arena.animate(performance.now() / 1000);
   Render.animateAtmosphere(performance.now() / 1000);
   Render.draw(playing);                    // scena + arma in prima persona sopra
+}
+
+// Eliminato e in modalita' spettatore (vedi spectate.js)
+function spectating() {
+  return !!(window.Spectate && Spectate.isActive());
 }
 
 function loop(time) {
@@ -80,7 +87,7 @@ function loop(time) {
   if (window.MenuNav) MenuNav.update(dt);   // menu col controller: croce, A, B, LB/RB
 
   const playing = currentMenuState === 'PLAYING';
-  if (playing) applyLook(dt);
+  if (playing && !spectating()) applyLook(dt);
 
   accumulator += dt;
   let steps = 0;
@@ -92,7 +99,7 @@ function loop(time) {
   if (steps === MAX_STEPS) accumulator = 0;
 
   // Camera tra l'ultimo passo e il prossimo: niente scatti
-  if (playing) Player.smoothCamera(accumulator / FIXED_STEP);
+  if (playing && !spectating()) Player.smoothCamera(accumulator / FIXED_STEP);
 
   render(dt);
   if (currentMenuState === 'PLAYING') updateHUD();

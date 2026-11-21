@@ -25,11 +25,12 @@
   // Dove si tiene ogni arma in prima persona (coordinate della camera dell'arma, in metri):
   //   hip  = arma al fianco · adsZ = distanza dall'occhio mirando · kick = rinculo
   //   sight = altezza della linea di mira sopra l'impugnatura · muzzle = bocca della canna
+  //   adsDrop = quanto l'arma scende sotto il mirino mirando (non copre il mirino; di base 0.026)
   const INFO = {
-    pistol:  { sight: 0.064, muzzle: [0, 0.037, -0.19], hip: [0.17, -0.18, -0.50], adsZ: -0.42, kick: 0.6 },
-    smg:     { sight: 0.098, muzzle: [0, 0.048, -0.37], hip: [0.19, -0.22, -0.52], adsZ: -0.34, kick: 0.35 },
-    rifle:   { sight: 0.123, muzzle: [0, 0.045, -0.73], hip: [0.19, -0.23, -0.50], adsZ: -0.30, kick: 0.5 },
-    shotgun: { sight: 0.077, muzzle: [0, 0.055, -0.67], hip: [0.19, -0.22, -0.50], adsZ: -0.34, kick: 1.0 },
+    pistol:  { sight: 0.064, muzzle: [0, 0.037, -0.19], hip: [0.17, -0.18, -0.50], adsZ: -0.42, kick: 0.6,  adsDrop: 0.030 },
+    smg:     { sight: 0.098, muzzle: [0, 0.048, -0.37], hip: [0.19, -0.22, -0.52], adsZ: -0.34, kick: 0.35, adsDrop: 0.026 },
+    rifle:   { sight: 0.123, muzzle: [0, 0.045, -0.73], hip: [0.19, -0.23, -0.50], adsZ: -0.30, kick: 0.5,  adsDrop: 0.024 },
+    shotgun: { sight: 0.077, muzzle: [0, 0.055, -0.67], hip: [0.19, -0.22, -0.50], adsZ: -0.34, kick: 1.0,  adsDrop: 0.026 },
   };
 
   // Gli oggetti a terra sono un po' piu' grandi del vero, cosi' si vedono da lontano
